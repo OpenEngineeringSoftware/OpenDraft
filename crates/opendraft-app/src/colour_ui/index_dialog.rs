@@ -9,10 +9,9 @@ use opendraft_ui::{widgets, Theme};
 use super::names::{self, from_index, index_of};
 use super::{paint_swatch, Pick};
 
-const CELL: f32 = 17.0;
-const GAP: f32 = 2.0;
+const CELL: f32 = 18.0;
 const HUES: u8 = 24;
-const WIDTH: f32 = HUES as f32 * (CELL + GAP) + 32.0;
+const WIDTH: f32 = HUES as f32 * CELL + 32.0;
 /// The shades of each hue, top row first: the full colours from light to
 /// dark, then the pale ones from dark to light.
 const SHADE_ROWS: [u8; 10] = [0, 2, 4, 6, 8, 9, 7, 5, 3, 1];
@@ -49,44 +48,27 @@ pub fn show(ui: &Ui, theme: &Theme, id: Id, by_layer: bool) -> Option<Pick> {
     let mut ok = false;
     let mut cancel = false;
     widgets::dialog(ui.ctx(), theme, "Select Color", &mut open, WIDTH, |ui| {
-        let mut hovered = None;
-        let mut double = false;
-        let mut cell = |ui: &mut Ui, i: u8, state: &mut State| {
-            let response = index_cell(ui, theme, i, state.chosen);
-            if response.hovered() {
-                hovered = Some(i);
-            }
-            if response.clicked() || response.double_clicked() {
-                let pick = Pick::Color(from_index(i));
-                state.chosen = Some(pick);
-                state.text = label(pick);
-                double |= response.double_clicked();
-            }
-        };
+        let chosen = chosen_index(&state);
         widgets::field_label(ui, theme, "Index colors");
-        egui::Grid::new(id.with("grid"))
-            .spacing(egui::vec2(GAP, GAP))
-            .show(ui, |ui| {
-                for shade in SHADE_ROWS {
-                    for hue in 0..HUES {
-                        cell(ui, 10 + hue * 10 + shade, &mut state);
-                    }
-                    ui.end_row();
-                }
-            });
+        let grid: Vec<Vec<u8>> = SHADE_ROWS
+            .iter()
+            .map(|shade| (0..HUES).map(|hue| 10 + hue * 10 + shade).collect())
+            .collect();
+        let mut hit = block(ui, theme, &grid, chosen);
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = GAP;
-            for i in 1..=9 {
-                cell(ui, i, &mut state);
-            }
-            ui.add_space(24.0);
-            for i in 250..=255 {
-                cell(ui, i, &mut state);
-            }
+            let standard = block(ui, theme, &[(1..=9).collect()], chosen);
+            ui.add_space(CELL);
+            let greys = block(ui, theme, &[(250..=255).collect()], chosen);
+            hit = std::mem::take(&mut hit).or(standard).or(greys);
         });
+        if let Some(i) = hit.clicked {
+            let pick = Pick::Color(from_index(i));
+            state.chosen = Some(pick);
+            state.text = label(pick);
+        }
         ui.add_space(6.0);
-        ui.label(describe(hovered.or_else(|| chosen_index(&state))));
+        ui.label(describe(hit.hovered.or_else(|| chosen_index(&state))));
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             widgets::field_label(ui, theme, "Color:");
@@ -135,7 +117,7 @@ pub fn show(ui: &Ui, theme: &Theme, id: Id, by_layer: bool) -> Option<Pick> {
                 });
             });
         });
-        ok |= double;
+        ok |= hit.double;
     });
     let picked = state.chosen.filter(|_| ok);
     ui.data_mut(|d| {
@@ -167,32 +149,85 @@ fn describe(index: Option<u8>) -> String {
     }
 }
 
-/// One square of the grid; colour 7 is half white, half black.
-fn index_cell(ui: &mut Ui, theme: &Theme, i: u8, chosen: Option<Pick>) -> egui::Response {
-    let (rect, response) = ui.allocate_exact_size(egui::vec2(CELL, CELL), Sense::click());
-    if i == 7 {
-        ui.painter().extend(half_and_half(rect));
-    } else {
-        let (r, g, b) = aci_rgb(i);
-        ui.painter()
-            .rect_filled(rect, 1.0, Color32::from_rgb(r, g, b));
-    }
-    let selected = matches!(chosen, Some(Pick::Color(color)) if index_of(color) == Some(i));
-    if selected || response.hovered() {
-        ui.painter().rect_stroke(
-            rect,
-            1.0,
-            Stroke::new(if selected { 2.0_f32 } else { 1.5 }, theme.colors.text),
-            egui::StrokeKind::Inside,
-        );
-    }
-    response
+/// What the pointer did over a block of cells.
+#[derive(Default)]
+struct Hit {
+    hovered: Option<u8>,
+    clicked: Option<u8>,
+    double: bool,
 }
 
-/// The swatch of colour 7: white above the diagonal, black below.
-pub fn half_and_half(rect: Rect) -> [egui::Shape; 2] {
+impl Hit {
+    fn or(self, other: Hit) -> Hit {
+        Hit {
+            hovered: self.hovered.or(other.hovered),
+            clicked: self.clicked.or(other.clicked),
+            double: self.double || other.double,
+        }
+    }
+}
+
+/// Rows of colour cells drawn edge to edge in a frame; colour 7 is half
+/// white, half black. The chosen cell is ringed, and so is the one under
+/// the pointer.
+fn block(ui: &mut Ui, theme: &Theme, rows: &[Vec<u8>], chosen: Option<u8>) -> Hit {
+    let columns = rows.iter().map(Vec::len).max().unwrap_or(0);
+    let size = egui::vec2(columns as f32 * CELL, rows.len() as f32 * CELL);
+    let (rect, response) = ui.allocate_exact_size(size, Sense::click());
+    let painter = ui.painter();
+    let pointer = response.hover_pos();
+    let mut hit = Hit::default();
+    for (r, row) in rows.iter().enumerate() {
+        for (c, &i) in row.iter().enumerate() {
+            let at = cell_rect(rect, r, c);
+            if i == 7 {
+                painter.extend(half_and_half(at, 0.0));
+            } else {
+                let (red, green, blue) = aci_rgb(i);
+                painter.rect_filled(at, 0.0, Color32::from_rgb(red, green, blue));
+            }
+            if pointer.is_some_and(|p| at.contains(p)) {
+                hit.hovered = Some(i);
+            }
+        }
+    }
+    painter.rect_stroke(
+        rect,
+        0.0,
+        Stroke::new(1.0_f32, theme.colors.border),
+        egui::StrokeKind::Outside,
+    );
+    for (r, row) in rows.iter().enumerate() {
+        for (c, &i) in row.iter().enumerate() {
+            let selected = chosen == Some(i);
+            if selected || hit.hovered == Some(i) {
+                painter.rect_stroke(
+                    cell_rect(rect, r, c),
+                    0.0,
+                    Stroke::new(if selected { 2.0_f32 } else { 1.5 }, theme.colors.text),
+                    egui::StrokeKind::Inside,
+                );
+            }
+        }
+    }
+    if response.clicked() || response.double_clicked() {
+        hit.clicked = hit.hovered;
+        hit.double = hit.hovered.is_some() && response.double_clicked();
+    }
+    hit
+}
+
+/// The square of row `r`, column `c` in a block whose corner is `rect.min`.
+fn cell_rect(rect: Rect, r: usize, c: usize) -> Rect {
+    let min = rect.min + egui::vec2(c as f32 * CELL, r as f32 * CELL);
+    Rect::from_min_size(min, egui::vec2(CELL, CELL))
+}
+
+/// The swatch of colour 7: white above the diagonal, black below, its
+/// corners rounded by `rounding`.
+pub fn half_and_half(rect: Rect, rounding: f32) -> [egui::Shape; 2] {
     [
-        egui::Shape::rect_filled(rect, 1.0, Color32::WHITE),
+        egui::Shape::rect_filled(rect, rounding, Color32::WHITE),
         egui::Shape::convex_polygon(
             vec![rect.right_top(), rect.right_bottom(), rect.left_bottom()],
             Color32::BLACK,
@@ -213,6 +248,17 @@ mod tests {
             .collect();
         seen.sort_unstable();
         assert_eq!(seen, (10..=249).collect::<Vec<u8>>());
+    }
+
+    #[test]
+    fn the_cells_touch() {
+        let rect = Rect::from_min_size(egui::pos2(10.0, 20.0), egui::vec2(100.0, 100.0));
+        assert_eq!(cell_rect(rect, 0, 0).right(), cell_rect(rect, 0, 1).left());
+        assert_eq!(cell_rect(rect, 0, 0).bottom(), cell_rect(rect, 1, 0).top());
+        assert_eq!(
+            cell_rect(rect, 2, 3).min,
+            egui::pos2(10.0 + 3.0 * CELL, 20.0 + 2.0 * CELL)
+        );
     }
 
     #[test]

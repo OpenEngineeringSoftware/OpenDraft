@@ -44,7 +44,7 @@ pub fn paint_swatch(painter: &Painter, theme: &Theme, rect: Rect, color: Color) 
 
 fn swatch_shapes(theme: &Theme, rect: Rect, color: Color) -> Vec<Shape> {
     let mut shapes = if color == Color::Foreground {
-        index_dialog::half_and_half(rect).to_vec()
+        index_dialog::half_and_half(rect, 1.0).to_vec()
     } else {
         vec![Shape::rect_filled(rect, 2.0, display(theme, color))]
     };
@@ -109,10 +109,11 @@ pub fn field(
         FontId::proportional(theme.font_size_body),
         theme.colors.text,
     );
-    let current = match (swatch_color, label) {
-        (Some(color), _) => Some(Pick::Color(color)),
-        (None, "ByLayer") => Some(Pick::ByLayer),
-        (None, "ByBlock") => Some(Pick::ByBlock),
+    // A ByLayer field shows the layer's swatch, but its colour is ByLayer.
+    let current = match (label, swatch_color) {
+        ("ByLayer", _) => Some(Pick::ByLayer),
+        ("ByBlock", _) => Some(Pick::ByBlock),
+        (_, Some(color)) => Some(Pick::Color(color)),
         _ => None,
     };
     palette_popup(ui, theme, id, &response, current, by_layer)
