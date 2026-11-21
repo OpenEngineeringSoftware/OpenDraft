@@ -183,6 +183,26 @@ impl View {
                     self.sheet.fit(Some(layout.sheet_bounds()), rect);
                 }
             }
+            // Inside an unlocked viewport the window frames its view, as
+            // ZOOM Extents does; otherwise the sheet shows it (the corners of
+            // a locked viewport's model, turned into paper).
+            Some(Request::Window(a, b)) => match vp.as_ref() {
+                Some(v) if !v.locked => {
+                    let window = Bounds::from_points(a, b);
+                    let framed = Viewport::framing(v.id, v.center, v.width, v.height, Some(window));
+                    vp = Some(Viewport {
+                        view_center: framed.view_center,
+                        scale: framed.scale,
+                        ..v.clone()
+                    });
+                    edited = true;
+                }
+                Some(v) => {
+                    let window = Bounds::from_points(v.model_to_paper(a), v.model_to_paper(b));
+                    self.sheet.show_window(window, rect);
+                }
+                None => self.sheet.show_window(Bounds::from_points(a, b), rect),
+            },
             Some(Request::Zoom(factor)) => {
                 let at = self
                     .clip

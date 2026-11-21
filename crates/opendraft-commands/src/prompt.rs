@@ -100,6 +100,8 @@ pub struct Options<T> {
     /// For an object prompt: a click in empty space, or a drag started
     /// there, answers it too (TRIM's crossing window and freehand path).
     pub sweep: bool,
+    /// For a point prompt: no object snaps, tracking or ortho (ZOOM's window).
+    pub no_snap: bool,
 }
 
 pub type PointOptions = Options<Point>;
@@ -123,6 +125,7 @@ impl<T> Options<T> {
             pick_locked: false,
             esc_backs: false,
             sweep: false,
+            no_snap: false,
         }
     }
 
@@ -295,6 +298,7 @@ pub struct Prompt {
     pub esc_backs: bool,
     /// See [`Options::sweep`].
     pub sweep: bool,
+    pub no_snap: bool,
     /// For [`Wants::MTextEditor`]: the text to edit.
     pub mtext: Option<Box<MText>>,
     /// For [`Wants::MTextEditor`]: the text object being edited, if there is
@@ -333,6 +337,7 @@ impl Prompt {
             pick_locked: options.pick_locked,
             esc_backs: options.esc_backs,
             sweep: options.sweep,
+            no_snap: options.no_snap,
             mtext: None,
             mtext_of: None,
             single_line: false,

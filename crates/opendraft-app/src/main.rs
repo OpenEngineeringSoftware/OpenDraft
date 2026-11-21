@@ -189,6 +189,7 @@ mod updates;
 mod whats_new;
 mod window_memory;
 mod xline_cmd;
+mod zoom_cmd;
 
 use eframe::egui;
 

@@ -38,3 +38,12 @@ impl Editor {
         }
     }
 }
+
+impl<T> Options<T> {
+    /// Take the point where the pointer is: no object snaps, tracking or
+    /// ortho (see [`Options::no_snap`]).
+    pub fn no_snap(mut self) -> Self {
+        self.no_snap = true;
+        self
+    }
+}

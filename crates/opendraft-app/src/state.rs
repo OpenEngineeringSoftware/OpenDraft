@@ -48,6 +48,8 @@ pub struct Doc {
     /// (`path` is none, so Save asks where): only where Save As starts, until
     /// the drawing is saved.
     pub recovery_origin: Option<PathBuf>,
+    /// What a ZOOM command started in this drawing asked for.
+    pub zoom_to: crate::zoom_cmd::ZoomSlot,
 }
 
 impl Doc {
@@ -65,6 +67,7 @@ impl Doc {
             block_edit: None,
             placeholder: false,
             recovery_origin: None,
+            zoom_to: Default::default(),
         }
     }
 

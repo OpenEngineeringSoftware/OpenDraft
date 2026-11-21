@@ -131,6 +131,8 @@ pub struct PointPrompt {
     /// path, a click is reported where it was pressed, with no object (see
     /// `opendraft_commands::Options::sweep`).
     pub sweep: bool,
+    /// No object snaps, tracking or ortho: the point is where the pointer is.
+    pub no_snap: bool,
 }
 
 #[derive(Default)]

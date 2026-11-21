@@ -144,12 +144,25 @@ impl View {
     }
 
     pub fn request_zoom_extents(&mut self) {
-        self.request = Some(Request::Extents);
+        self.request(Request::Extents);
+    }
+
+    /// Show the window with corners `a` and `b` on the next frame (ZOOM
+    /// Window). The corners are in the space being worked in: the model, the
+    /// sheet, or the model through the active viewport.
+    pub fn request_zoom_window(&mut self, a: Point, b: Point) {
+        self.request(Request::Window(a, b));
     }
 
     /// Zoom about the viewport center on the next frame.
     pub fn request_zoom_step(&mut self, zoom_in: bool) {
         let factor = if zoom_in { STEP_ZOOM } else { 1.0 / STEP_ZOOM };
-        self.request = Some(Request::Zoom(factor));
+        self.request(Request::Zoom(factor));
+    }
+
+    /// A zoom for the next frame; it is a step of its own for ZOOM Previous.
+    fn request(&mut self, request: Request) {
+        self.previous.new_step();
+        self.request = Some(request);
     }
 }

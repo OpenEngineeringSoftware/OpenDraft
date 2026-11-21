@@ -63,12 +63,22 @@ impl Camera {
             *self = Self::default();
             return;
         };
+        self.frame(b, viewport, 0.9);
+    }
+
+    /// Show the window `b` as large as the viewport allows, with no margin
+    /// (ZOOM Window).
+    pub fn show_window(&mut self, b: Bounds, viewport: Rect) {
+        self.frame(b, viewport, 1.0);
+    }
+
+    /// Centre on `b` and fill `usable` of the viewport with it.
+    fn frame(&mut self, b: Bounds, viewport: Rect, usable: f64) {
         let (w, h) = (b.max.x - b.min.x, b.max.y - b.min.y);
         let (vw, vh) = (f64::from(viewport.width()), f64::from(viewport.height()));
         if vw < 1.0 || vh < 1.0 {
             return;
         }
-        let usable = 0.9;
         let zoom = match (w > 1e-9, h > 1e-9) {
             (true, true) => (vw * usable / w).min(vh * usable / h),
             (true, false) => vw * usable / w,
@@ -181,5 +191,18 @@ mod tests {
         assert!(cam.zoom.is_finite());
         cam.fit(None, viewport());
         assert_eq!(cam, Camera::default());
+    }
+
+    #[test]
+    fn a_window_fills_the_viewport_with_no_margin() {
+        let mut cam = Camera::default();
+        // Wider than the viewport's shape: its width fills the viewport.
+        let b = Bounds::from_points(Point::new(10.0, 10.0), Point::new(410.0, 20.0));
+        cam.show_window(b, viewport());
+        let min = cam.world_to_screen(b.min, viewport());
+        let max = cam.world_to_screen(b.max, viewport());
+        assert!((min.x - viewport().left()).abs() < 1e-3);
+        assert!((max.x - viewport().right()).abs() < 1e-3);
+        assert_eq!(cam.center, Point::new(210.0, 15.0));
     }
 }

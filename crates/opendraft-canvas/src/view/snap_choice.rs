@@ -109,7 +109,11 @@ impl View {
         cursor: Option<Point>,
         shift: bool,
     ) -> (Aim<'a>, Option<(Point, Option<SnapPoint>)>) {
-        let picking = self.point_prompt.as_ref().is_some_and(|p| p.pick);
+        // An object prompt, or a point prompt that wants the bare pointer.
+        let picking = self
+            .point_prompt
+            .as_ref()
+            .is_some_and(|p| p.pick || p.no_snap);
         let mut aim = self.aim(document, modes, grid, picking, shift);
         let asking = cursor.filter(|_| self.point_prompt.is_some() && !picking);
         // What the pointer rests on is kept, and the paths of what is kept

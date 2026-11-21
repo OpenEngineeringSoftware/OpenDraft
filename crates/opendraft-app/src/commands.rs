@@ -329,6 +329,13 @@ fn all() -> Vec<Command<AppState>> {
             s.docs[s.active].view.request_zoom_step(false)
         })
         .transparent(),
+        cmd("view.zoom_previous", "Zoom Previous", |s| {
+            if !s.docs[s.active].view.zoom_previous() {
+                s.say_no_previous_view();
+            }
+        })
+        .transparent(),
+        cmd("view.zoom", "Zoom", |s| s.start_zoom()).checked(|s| s.is_running("ZOOM")),
         toggle_command!("view.grid", "Grid", show_grid)
             .key("F7")
             .transparent(),
@@ -755,9 +762,22 @@ mod tests {
     fn view_commands_are_registered_and_enabled() {
         let registry = build_registry();
         let mut state = AppState::new();
-        for id in ["view.zoom_extents", "view.zoom_in", "view.zoom_out"] {
+        for id in [
+            "view.zoom_extents",
+            "view.zoom_in",
+            "view.zoom_out",
+            "view.zoom_previous",
+        ] {
             assert!(registry.is_enabled(id, &state), "{id}");
             registry.execute(id, &mut state).unwrap();
         }
+    }
+
+    #[test]
+    fn zoom_previous_with_nothing_to_go_back_to_says_so() {
+        let registry = build_registry();
+        let mut state = AppState::new();
+        registry.execute("view.zoom_previous", &mut state).unwrap();
+        assert_eq!(state.message, "No previous view saved.");
     }
 }

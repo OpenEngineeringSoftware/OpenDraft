@@ -163,6 +163,7 @@ fn a_press_on_nothing_at_a_sweep_prompt_is_a_path_when_dragged_and_a_click_when_
     view.set_point_prompt(Some(crate::PointPrompt {
         pick: true,
         sweep: true,
+        no_snap: false,
         ..Default::default()
     }));
     let (from, mid, to) = (pos2(100.0, 100.0), pos2(200.0, 120.0), pos2(300.0, 100.0));

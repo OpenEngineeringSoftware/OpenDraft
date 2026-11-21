@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use egui::{Color32, PointerButton, Pos2, Rect, Sense, Stroke, StrokeKind, Ui};
 use opendraft_core::{
-    arc, bulge, width, Color, Document, Entity, EntityId, LayerId, LayoutId, Point, ViewportId,
+    arc, bulge, width, Bounds, Color, Document, Entity, EntityId, LayerId, LayoutId, Point,
+    ViewportId,
 };
 
 use crate::camera::Camera;
@@ -37,6 +38,7 @@ mod layout;
 mod paint;
 mod path_stroke;
 mod point_paint;
+mod previous;
 mod snap_choice;
 mod snap_marker;
 mod sweep;
@@ -70,6 +72,8 @@ const STEP_ZOOM: f64 = 1.5;
 enum Request {
     Extents,
     Zoom(f64),
+    /// ZOOM Window: two corners in the space being worked in.
+    Window(Point, Point),
 }
 
 /// Per-drawing view state.
@@ -98,6 +102,8 @@ pub struct View {
     /// button is down (see `sweep.rs`).
     sweep: Option<Vec<Pos2>>,
     request: Option<Request>,
+    /// The views ZOOM Previous goes back to.
+    previous: previous::Previous,
     /// Set while a running command waits for a point.
     point_prompt: Option<PointPrompt>,
     /// Set while a running command waits for objects to be selected.
@@ -180,7 +186,7 @@ impl View {
         // A double click of the wheel zooms to the extents, as in AutoCAD.
         // It only moves the view, so a running command carries on.
         if response.double_clicked_by(PointerButton::Middle) {
-            self.request = Some(Request::Extents);
+            self.request_zoom_extents();
         }
 
         let mut layout_input = LayoutInput::default();
@@ -192,6 +198,9 @@ impl View {
                     self.camera.fit(document.bounds(), rect);
                 }
                 Some(Request::Zoom(factor)) => self.camera.zoom_at(rect.center(), rect, factor),
+                Some(Request::Window(a, b)) => {
+                    self.camera.show_window(Bounds::from_points(a, b), rect);
+                }
                 None => {}
             }
             if response.dragged_by(PointerButton::Middle) {
@@ -206,6 +215,7 @@ impl View {
         if !in_layout {
             self.wheel_zoom(ui, rect, response.hovered(), pointer);
         }
+        self.note_view(ui.input(|i| i.time));
 
         let tolerance = self.sizes.pick / self.camera.zoom;
         let cursor = pointer.map(|p| self.camera.screen_to_world(p, rect));
