@@ -38,8 +38,6 @@ fn the_click_that_ends_a_trim_window_does_not_start_another() {
     let mut time = 0.0;
     app.state.start_command("Trim", crate::edges::trim_objects);
     app.state.settle_command();
-    app.state.answer_enter();
-    app.state.settle_command();
     play(&mut app, &ctx, Vec::new(), &mut time);
     let canvas = app.state.docs[0].dynamic_input.canvas.unwrap();
 
@@ -58,7 +56,7 @@ fn the_click_that_ends_a_trim_window_does_not_start_another() {
 
     let prompt = app.state.cmd_prompt().text;
     assert!(
-        prompt.starts_with("Select object to trim"),
+        prompt.starts_with("Quick mode, select object to trim"),
         "{prompt} after {:?}",
         app.state.cmdline.log
     );

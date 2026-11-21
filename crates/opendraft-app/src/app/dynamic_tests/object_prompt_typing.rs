@@ -35,8 +35,6 @@ fn trimmed(dynamic: bool) -> (OpenDraftApp, egui::Context, f64) {
     app.state.add_entity(upright());
     app.state.start_command("Trim", crate::edges::trim_objects);
     app.state.settle_command();
-    app.state.answer_enter();
-    app.state.settle_command();
     play(&mut app, &ctx, Vec::new(), &mut time);
     let doc = &app.state.docs[0];
     let canvas = doc.dynamic_input.canvas.unwrap();

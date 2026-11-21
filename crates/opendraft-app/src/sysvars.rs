@@ -351,6 +351,7 @@ pub fn table() -> &'static SysVarTable<AppState> {
         variables.extend(crate::dim_vars_extra::variables());
         variables.extend(crate::spline_memory::variables());
         variables.extend(crate::hatch_memory::variables());
+        variables.extend(crate::trim_memory::variables());
         SysVarTable::new(variables).unwrap_or_else(|e| panic!("invalid system variable table: {e}"))
     })
 }

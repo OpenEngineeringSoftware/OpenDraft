@@ -183,6 +183,7 @@ mod text_commands;
 mod text_edit_cmd;
 mod text_memory;
 mod text_style_draft;
+mod trim_memory;
 mod units_state;
 mod units_vars;
 mod updates;

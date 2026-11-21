@@ -268,6 +268,15 @@ impl PanelViewer<'_> {
     }
 }
 
+/// Where an option's typed key is in its label: the capitals AutoCAD writes
+/// it with ("eXit", "mOde", "PAth"), else the start.
+fn key_span(label: &str, key: &str) -> (usize, usize) {
+    match label.find(key).filter(|_| !key.is_empty()) {
+        Some(at) => (at, at + key.len()),
+        None => (0, key.len().min(label.len())),
+    }
+}
+
 /// An option in the prompt: its typed key is highlighted, like AutoCAD.
 fn option_chip(
     ui: &mut egui::Ui,
@@ -276,15 +285,20 @@ fn option_chip(
 ) -> egui::Response {
     let font = egui::TextStyle::Body.resolve(ui.style());
     let mut job = egui::text::LayoutJob::default();
-    let split = option.key.len().min(option.label.len());
-    let (key, rest) = option.label.split_at(split);
+    let (from, to) = key_span(&option.label, &option.key);
     let format = |color| egui::TextFormat {
         font_id: font.clone(),
         color,
         ..Default::default()
     };
+    let label = &option.label;
+    let (before, key, after) = match (label.get(..from), label.get(from..to), label.get(to..)) {
+        (Some(before), Some(key), Some(after)) => (before, key, after),
+        _ => ("", "", &label[..]),
+    };
+    job.append(before, 0.0, format(colors.text));
     job.append(key, 0.0, format(colors.accent_text));
-    job.append(rest, 0.0, format(colors.text));
+    job.append(after, 0.0, format(colors.text));
     ui.add(egui::Label::new(job).sense(egui::Sense::click()))
         .on_hover_cursor(egui::CursorIcon::PointingHand)
 }
@@ -363,5 +377,15 @@ mod tests {
             assert_eq!(log.top(), inside.top(), "{height}");
             assert_eq!(log.height(), (height - 30.0).max(0.0), "{height}");
         }
+    }
+
+    #[test]
+    fn an_options_key_is_found_where_its_capitals_are() {
+        assert_eq!(key_span("Fence", "F"), (0, 1));
+        assert_eq!(key_span("mOde", "O"), (1, 2));
+        assert_eq!(key_span("eXit", "X"), (1, 2));
+        assert_eq!(key_span("PAth", "PA"), (0, 2));
+        // A key not written in the label: its first letters, as before.
+        assert_eq!(key_span("Undo", "u"), (0, 1));
     }
 }

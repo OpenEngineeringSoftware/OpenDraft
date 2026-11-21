@@ -8,7 +8,7 @@ use opendraft_canvas::{select_in, Region};
 use opendraft_commands::{Answer, Cancelled, Editor, GhostStyle, PointOptions, Transaction};
 use opendraft_core::{Attributes, Document, Entity, EntityId, Point};
 
-use crate::edges::{extend_plan, trim_plan, Mode};
+use crate::edges::{plan, Mode};
 
 /// Where a fence through `path` crosses `target`: the points to change it
 /// at, in the order the fence meets them.
@@ -130,6 +130,7 @@ pub(crate) fn change_swept(
     edges: &Option<Vec<EntityId>>,
     mode: Mode,
     region: Region,
+    erase: bool,
 ) -> Result<usize, Cancelled> {
     let edges = edges.clone();
     let name = match mode {
@@ -162,11 +163,7 @@ pub(crate) fn change_swept(
                 continue;
             };
             let others = edges_for(doc, &edges, target.id);
-            let plan = match mode {
-                Mode::Trim => trim_plan(&target.entity, &others, at),
-                Mode::Extend => extend_plan(&target.entity, &others, at),
-            };
-            if let Ok(left) = plan {
+            if let Ok(left) = plan(mode, &target.entity, &others, at, erase) {
                 let (id, attrs) = (target.id, target.attrs.clone());
                 put_back(tx, id, attrs, left);
                 done += 1;
@@ -254,9 +251,6 @@ mod tests {
             state.add_entity(e.clone());
         }
         state.start_command("Trim", command);
-        state.settle_command();
-        // Enter: every object is an edge.
-        state.answer_enter();
         state.settle_command();
         state
     }

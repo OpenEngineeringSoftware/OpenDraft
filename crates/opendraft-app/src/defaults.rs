@@ -10,7 +10,7 @@ use opendraft_commands::Editor;
 use crate::state::AppState;
 use crate::{
     attribute_memory, corner_memory, donut_cmd, hatch_memory, overkill_memory, pedit_memory,
-    polygon_cmd, purge_memory, rect_memory, spline_memory, text_memory,
+    polygon_cmd, purge_memory, rect_memory, spline_memory, text_memory, trim_memory,
 };
 
 /// One remembered section, shared between the application and the commands
@@ -48,6 +48,7 @@ pub struct CommandDefaults {
     pub rect: Slot<rect_memory::Memory>,
     pub spline: Slot<spline_memory::Memory>,
     pub text: Slot<text_memory::Memory>,
+    pub trim: Slot<trim_memory::Memory>,
 }
 
 impl CommandDefaults {
@@ -65,6 +66,7 @@ impl CommandDefaults {
             rect: Slot::new(rect_memory::load(storage)),
             spline: Slot::new(spline_memory::load(storage)),
             text: Slot::new(text_memory::load(storage)),
+            trim: Slot::new(trim_memory::load(storage)),
         }
     }
 
@@ -79,6 +81,7 @@ impl CommandDefaults {
         rect_memory::save(&self.rect.get(), storage);
         spline_memory::save(&self.spline.get(), storage);
         text_memory::save(&self.text.get(), storage);
+        trim_memory::save(&self.trim.get(), storage);
     }
 }
 
