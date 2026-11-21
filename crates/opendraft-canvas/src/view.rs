@@ -213,6 +213,9 @@ impl View {
         let selecting = !prompting;
         let shift = ui.input(|i| i.modifiers.shift);
         let picking = self.point_prompt.as_ref().is_some_and(|p| p.pick);
+        // Grips belong to no command: a command asking for objects shows the
+        // selected ones highlighted, without grips to press, as in AutoCAD.
+        let grips_on = selecting && !self.selecting_objects;
         // What a click on an object prompt can pick (LAYULK reaches locked layers).
         let pick_object = match &self.point_prompt {
             Some(p) if p.pick && p.pick_locked => pick_visible_here,
@@ -271,10 +274,10 @@ impl View {
         self.snap_acquire.clear_if(placed.is_some());
         // A press on a grip of a selected object takes it instead of selecting.
         let grip_pick = pressed_at
-            .filter(|_| selecting)
+            .filter(|_| grips_on)
             .and_then(|at| grip_at(document, selection, at, self.sizes.grip / self.camera.zoom));
         let grip_hover = cursor
-            .filter(|_| selecting && self.drag.is_none())
+            .filter(|_| grips_on && self.drag.is_none())
             .and_then(|c| grip_at(document, selection, c, self.sizes.grip / self.camera.zoom));
         keep_selected(&mut self.warm, selection);
         let swallow = self.press_taken;
@@ -380,7 +383,7 @@ impl View {
             Some(clip) => painter.with_clip_rect(clip.intersect(rect)),
             None => painter,
         };
-        if selecting && self.drag.is_none() {
+        if grips_on && self.drag.is_none() {
             let marks = paint::GripMarks {
                 hovered: grip_hover,
                 warm: &self.warm,
