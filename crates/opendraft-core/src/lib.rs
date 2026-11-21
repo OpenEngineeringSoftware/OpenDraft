@@ -26,6 +26,7 @@ mod fillet;
 mod fillet_ellipse;
 mod grip;
 pub mod hatch;
+pub mod hsl;
 pub mod infinite;
 mod intersect;
 mod join;
