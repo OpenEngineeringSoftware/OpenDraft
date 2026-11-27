@@ -231,3 +231,30 @@ fn names_of_block_files() {
     );
     assert!(oblock_path(PathBuf::from("Valve.dxf")).is_err());
 }
+
+#[test]
+fn a_block_file_is_exported_as_a_dxf_once_saved() {
+    let dir = tempfile::tempdir().expect("dir");
+    let path = box_file(dir.path());
+    let (mut state, script) = state_with_picker();
+    state.open_path(&path);
+    state.add_entity(Entity::Line {
+        start: p(0.0, 0.0),
+        end: p(3.0, 3.0),
+    });
+    let target = dir.path().join("out.dxf");
+    script.will_save_to(Some(target.clone()));
+    assert!(!state.export_dxf(), "unsaved changes: save first");
+    assert!(!target.exists());
+    assert!(state.save_active());
+    script.will_save_to(Some(target.clone()));
+    assert!(state.export_dxf());
+    let bytes = std::fs::read(&target).expect("the dxf");
+    let opendraft_content::oblock::DxfBlock::One { file, .. } =
+        BlockFile::from_dxf(&bytes, "x").expect("read")
+    else {
+        unreachable!("the symbol is in model space");
+    };
+    assert_eq!(file.name(), "Box");
+    assert_eq!(file.definition().expect("def").entities.len(), 2);
+}

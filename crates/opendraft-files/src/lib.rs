@@ -22,6 +22,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use opendraft_core::Document;
 
 pub use dwg::DwgFormat;
+pub use dxf::block_file::{block_header, export_block, BlockHeader};
 pub use dxf::{dynamic, DxfFormat};
 pub use error::FileError;
 pub use native::{NativeFormat, CURRENT_VERSION, NATIVE_EXTENSION};

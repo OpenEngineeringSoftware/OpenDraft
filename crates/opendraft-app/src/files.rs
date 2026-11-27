@@ -248,6 +248,9 @@ impl AppState {
     /// The drawing itself stays as it is: still unsaved if it was, and still
     /// tied to its own file.
     pub fn export_dxf(&mut self) -> bool {
+        if self.docs[self.active].oblock.is_some() {
+            return self.export_oblock_dxf();
+        }
         let doc = &self.docs[self.active];
         let suggested = format!("{}.dxf", doc.title);
         let directory = self.folder_for_dialogs(doc.path.as_deref());

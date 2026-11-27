@@ -28,6 +28,8 @@ use crate::blocks_payload::{BlockUuid, BlocksPackage, Entry, PayloadError};
 use crate::envelope::strict_json::{self, JsonError};
 use crate::library::store::write_atomic;
 
+pub use dxf::DxfBlock;
+
 pub const FORMAT: &str = "oblock";
 /// 0 is the development phase: see the module notes.
 pub const FORMAT_VERSION: u64 = 0;
@@ -272,5 +274,8 @@ impl BlockFile {
     }
 }
 
+mod dxf;
+#[cfg(test)]
+mod dxf_tests;
 #[cfg(test)]
 mod tests;

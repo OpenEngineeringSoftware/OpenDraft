@@ -9,7 +9,7 @@ use opendraft_content::oblock::BlockFile;
 use opendraft_ui::key;
 
 use crate::library_add_cmd::choose_source;
-use crate::oblock_doc::oblock_path;
+use crate::oblock_doc::{oblock_path, write_block_dxf};
 use crate::state::AppState;
 
 impl AppState {
@@ -21,16 +21,26 @@ impl AppState {
     }
 }
 
+/// Whether `path` names a DXF.
+fn is_dxf(path: &std::path::Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("dxf"))
+}
+
 /// The file the user named: a bare name goes in `folder` (beside the drawing,
 /// else where the last file was), and a name with no extension gets
-/// `.oblock`.
+/// `.oblock`. A `.dxf` name writes a DXF for other CAD programs.
 fn resolve(text: &str, folder: Option<&PathBuf>) -> Result<PathBuf, String> {
     let typed = PathBuf::from(text.trim().trim_matches('"'));
     let placed = match (typed.parent(), folder) {
         (Some(parent), Some(folder)) if parent.as_os_str().is_empty() => folder.join(&typed),
         _ => typed,
     };
+    if is_dxf(&placed) {
+        return Ok(placed);
+    }
     oblock_path(placed)
+        .map_err(|_| "A block file's name ends in .oblock (or .dxf, for a DXF).".to_owned())
 }
 
 /// WBLOCK: the selected objects, or a block of the drawing chosen by name (or
@@ -71,7 +81,13 @@ pub fn wblock(ed: &mut Editor, folder: Option<PathBuf>) -> Result<(), Cancelled>
             return Ok(());
         }
     };
-    match file.save(&path) {
+    let mut notes = warnings;
+    let written = if is_dxf(&path) {
+        write_block_dxf(&file, &path).map(|more| notes.extend(more))
+    } else {
+        file.save(&path).map_err(|e| e.to_string())
+    };
+    match written {
         Ok(()) => ed.say(format!(
             "Block \"{}\" written to {}.",
             file.name(),
@@ -79,8 +95,8 @@ pub fn wblock(ed: &mut Editor, folder: Option<PathBuf>) -> Result<(), Cancelled>
         )),
         Err(why) => ed.say(format!("Could not write {}: {why}", path.display())),
     }
-    for warning in warnings {
-        ed.say(warning);
+    for note in notes {
+        ed.say(note);
     }
     Ok(())
 }

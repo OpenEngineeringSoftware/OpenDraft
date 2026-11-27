@@ -44,7 +44,7 @@ impl Handles {
     }
 }
 
-fn hex(handle: u32) -> String {
+pub(super) fn hex(handle: u32) -> String {
     format!("{handle:X}")
 }
 
@@ -131,7 +131,18 @@ fn true_color(color: Color) -> Option<i32> {
     }
 }
 
+/// What a block file's DXF adds to an ordinary drawing's: the base point for
+/// `$INSBASE`, and the marker that says which block it is (see `block_file`).
+pub struct BlockExtras<'a> {
+    pub insbase: opendraft_core::Point,
+    pub marker: &'a str,
+}
+
 pub fn write(document: &Document) -> Result<Encoded, FileError> {
+    write_with(document, None)
+}
+
+pub fn write_with(document: &Document, extras: Option<&BlockExtras>) -> Result<Encoded, FileError> {
     let layouts = sheets(document);
     let mut h = Handles(0x0F);
     let mut ids = Ids {
@@ -312,7 +323,14 @@ pub fn write(document: &Document) -> Result<Encoded, FileError> {
     entities.end_section();
 
     let mut objects = Out::new();
-    write_objects(&mut objects, &mut h, &ids, document, leaders)?;
+    write_objects(
+        &mut objects,
+        &mut h,
+        &ids,
+        document,
+        leaders,
+        extras.map(|b| b.marker),
+    )?;
 
     let mut out = Out::new();
     out.section("HEADER");
@@ -329,7 +347,10 @@ pub fn write(document: &Document) -> Result<Encoded, FileError> {
     super::modify_settings::write_header(&mut out, document);
     super::ccs::write_header(&mut out, document);
     out.pair(9, "$INSBASE");
-    out.point3(10, 0.0, 0.0, 0.0);
+    match extras {
+        Some(b) => out.point3(10, finite(b.insbase.x)?, finite(b.insbase.y)?, 0.0),
+        None => out.point3(10, 0.0, 0.0, 0.0),
+    }
     let (lo, hi) = match document.model_bounds() {
         Some(b) => (
             (finite(b.min.x)?, finite(b.min.y)?),

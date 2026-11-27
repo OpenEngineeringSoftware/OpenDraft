@@ -323,6 +323,48 @@ impl Importer {
     }
 }
 
+/// The base point (`$INSBASE`) and OpenDraft's block marker of a DXF; an
+/// unreadable file or variable gives the origin and no marker.
+pub(super) fn block_header(bytes: &[u8]) -> super::block_file::BlockHeader {
+    let mut header = super::block_file::BlockHeader {
+        insbase: Point::new(0.0, 0.0),
+        marker: None,
+    };
+    let Ok(records) = records(bytes) else {
+        return header;
+    };
+    for record in &records {
+        match record.name.as_str() {
+            "SECTION" if record.text(2) == Some("HEADER") => {
+                let mut groups = record.groups.iter();
+                while let Some(group) = groups.next() {
+                    if group.code == 9 && group.value == "$INSBASE" {
+                        let (mut x, mut y) = (None, None);
+                        for next in groups.by_ref().take(3) {
+                            match next.code {
+                                10 => x = next.value.trim().parse::<f64>().ok(),
+                                20 => y = next.value.trim().parse::<f64>().ok(),
+                                _ => {}
+                            }
+                        }
+                        if let (Some(x), Some(y)) = (x, y) {
+                            if x.is_finite() && y.is_finite() {
+                                header.insbase = Point::new(x, y);
+                            }
+                        }
+                    }
+                }
+            }
+            "XRECORD" if header.marker.is_none() => {
+                let texts = record.groups.iter().filter(|g| g.code == 1);
+                header.marker = super::block_file::marker_text(texts.map(|g| g.value.as_str()));
+            }
+            _ => {}
+        }
+    }
+    header
+}
+
 pub fn read(bytes: &[u8]) -> Result<Loaded, FileError> {
     let records = records(bytes)?;
     if !records.iter().any(|r| r.name == "SECTION") {
