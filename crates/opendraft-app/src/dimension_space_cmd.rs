@@ -15,7 +15,7 @@ use crate::dimension_edit_cmd::{apply, dimensions_in, Change};
 pub fn dim_space(ed: &mut Editor) -> Result<(), Cancelled> {
     let Some((base_picked, Entity::Dimension(base))) = pick(ed, key!("Select base dimension"))?
     else {
-        ed.say("Select a linear dimension.");
+        ed.say(key!("Select a linear dimension."));
         return Err(Cancelled);
     };
     let base_id = base_picked.id;
@@ -31,7 +31,7 @@ pub fn dim_space(ed: &mut Editor) -> Result<(), Cancelled> {
     let spacing = match ed.ask_distance(options)? {
         Answer::Value(v) if v >= 0.0 => v,
         Answer::Value(_) => {
-            ed.say("Requires a value of zero or more.");
+            ed.say(key!("Requires a value of zero or more."));
             return Err(Cancelled);
         }
         _ => auto,
@@ -56,7 +56,9 @@ pub fn dim_space(ed: &mut Editor) -> Result<(), Cancelled> {
         .filter_map(|(id, off)| off.map(|o| (*id, o)))
         .unzip();
     if ids.len() < chosen.len() {
-        ed.say("Dimensions that do not run parallel to the base were left alone.");
+        ed.say(key!(
+            "Dimensions that do not run parallel to the base were left alone."
+        ));
     }
     let targets = spaced_offsets(&now, spacing);
     for (id, target) in ids.into_iter().zip(targets) {

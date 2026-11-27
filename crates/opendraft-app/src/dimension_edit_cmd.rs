@@ -6,7 +6,7 @@ use opendraft_commands::{Answer, Cancelled, Editor, Options, PointOptions};
 use opendraft_core::{DimText, Dimension, Entity, EntityId};
 use opendraft_ui::key;
 
-use crate::text::plural;
+use opendraft_commands::Wording;
 
 pub(crate) type Change = Box<dyn Fn(&Dimension) -> Option<Dimension> + Send>;
 
@@ -18,7 +18,7 @@ pub(crate) fn dimensions_in(ed: &Editor, ids: Vec<EntityId>) -> Result<Vec<Entit
             .collect::<Vec<_>>()
     })?;
     if found.is_empty() {
-        ed.say("No dimensions selected.");
+        ed.say(key!("No dimensions selected."));
         return Err(Cancelled);
     }
     Ok(found)
@@ -47,9 +47,10 @@ pub(crate) fn apply(
         Ok(refused)
     })?;
     if refused > 0 {
-        ed.say(format!(
-            "{} could not be changed that way.",
-            plural(refused, "dimension")
+        ed.say(Wording::count(
+            refused,
+            key!("%{count} dimension could not be changed that way."),
+            key!("%{count} dimensions could not be changed that way."),
         ));
     }
     Ok(())
@@ -171,7 +172,11 @@ pub fn dim_reassociate(ed: &mut Editor) -> Result<(), Cancelled> {
         }
         Ok(tied)
     })?;
-    ed.say(format!("{} tied.", plural(tied, "point")));
+    ed.say(Wording::count(
+        tied,
+        key!("%{count} point tied."),
+        key!("%{count} points tied."),
+    ));
     Ok(())
 }
 

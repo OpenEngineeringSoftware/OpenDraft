@@ -10,6 +10,7 @@ use opendraft_ui::key;
 
 use crate::attribute_prompt::ask_values;
 use crate::block_cmd::{ask_block_name, list_blocks, NameAnswer};
+use opendraft_commands::Wording;
 
 pub(crate) fn placed(
     block: &Arc<BlockDef>,
@@ -36,7 +37,7 @@ pub(crate) fn get_factor(ed: &Editor, message: &str, default: f64) -> Result<f64
         if factor.is_finite() && factor != 0.0 {
             return Ok(factor);
         }
-        ed.say("The scale factor cannot be zero.");
+        ed.say(key!("The scale factor cannot be zero."));
     }
 }
 
@@ -61,7 +62,9 @@ pub(crate) fn choose_block(ed: &Editor) -> Result<Option<Arc<BlockDef>>, Cancell
         (newest, offered_names(doc))
     })?;
     let Some(newest) = newest else {
-        ed.say("This drawing has no blocks. Make one with BLOCK first.");
+        ed.say(key!(
+            "This drawing has no blocks. Make one with BLOCK first."
+        ));
         return Ok(None);
     };
     loop {
@@ -82,7 +85,10 @@ pub(crate) fn choose_block(ed: &Editor) -> Result<Option<Arc<BlockDef>>, Cancell
         let lookup = name.clone();
         match ed.read(move |doc| doc.block_named(&lookup).cloned())? {
             Some(block) => return Ok(Some(block)),
-            None => ed.say(format!("Block \"{name}\" not found.")),
+            None => ed.say(Wording::new(
+                key!("Block \"%{name}\" not found."),
+                &[("name", &name)],
+            )),
         }
     }
 }

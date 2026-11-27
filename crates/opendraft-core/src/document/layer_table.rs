@@ -124,11 +124,11 @@ impl Document {
     /// Why a layer cannot be deleted, or `None` when it can.
     pub fn layer_delete_blocker(&self, id: LayerId) -> Option<&'static str> {
         if id == LayerId::DEFAULT {
-            Some("Layer 0 cannot be deleted")
+            Some(crate::key!("Layer 0 cannot be deleted"))
         } else if id == self.current_layer {
-            Some("The current layer cannot be deleted")
+            Some(crate::key!("The current layer cannot be deleted"))
         } else if self.layer_in_use(id) {
-            Some("A layer with objects on it cannot be deleted")
+            Some(crate::key!("A layer with objects on it cannot be deleted"))
         } else {
             None
         }

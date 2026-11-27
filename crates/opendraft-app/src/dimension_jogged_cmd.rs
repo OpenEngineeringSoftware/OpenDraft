@@ -22,7 +22,7 @@ pub fn dim_jogged(ed: &mut Editor) -> Result<(), Cancelled> {
             Entity::Circle { center, radius } | Entity::Arc { center, radius, .. } => {
                 break (center, radius.abs(), picked.at);
             }
-            _ => ed.say("Select an arc or a circle."),
+            _ => ed.say(key!("Select an arc or a circle.")),
         }
     };
     let shown = ed.get_point(PointOptions::new(key!("Specify center location override")))?;
@@ -30,7 +30,7 @@ pub fn dim_jogged(ed: &mut Editor) -> Result<(), Cancelled> {
     let (dx, dy) = (near.x - center.x, near.y - center.y);
     let length = dx.hypot(dy);
     if length < 1e-9 || radius < 1e-9 {
-        ed.say("Those points make no dimension.");
+        ed.say(key!("Those points make no dimension."));
         return Ok(());
     }
     let chord = Point::new(
@@ -61,7 +61,7 @@ pub fn dim_jogged(ed: &mut Editor) -> Result<(), Cancelled> {
     let mut dimension = Dimension::jogged(center, chord, shown, jog, &style);
     dimension.text_pos = Some(text_at);
     if dimension.picture().is_empty() {
-        ed.say("Those points make no dimension.");
+        ed.say(key!("Those points make no dimension."));
         return Ok(());
     }
     add(ed, Entity::Dimension(Box::new(dimension)), "Dimension")

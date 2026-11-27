@@ -9,6 +9,8 @@ use opendraft_commands::Session;
 use crate::io::Done;
 use crate::recovery::Recovery;
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 impl AppState {
     /// Begin this run's autosave session under `root`, and collect what an
@@ -19,7 +21,10 @@ impl AppState {
                 self.pending_recovery = Recovery::find_orphans(root, recovery.dir());
                 self.recovery = Some(std::sync::Arc::new(recovery));
             }
-            Err(error) => self.cmdline.say(format!("Autosave is off: {error}")),
+            Err(error) => self.cmdline.say(Wording::new(
+                key!("Autosave is off: %{error}"),
+                &[("error", &error.to_string())],
+            )),
         }
     }
 
@@ -88,7 +93,10 @@ impl AppState {
                         }
                     }
                 }
-                Err(error) => self.message = format!("Autosave failed: {error}"),
+                Err(error) => self.set_message(Wording::new(
+                    key!("Autosave failed: %{error}"),
+                    &[("error", &error.to_string())],
+                )),
             }
         }
     }
@@ -129,8 +137,10 @@ impl AppState {
                     recovered += 1;
                 }
                 Err(error) => {
-                    self.cmdline
-                        .say(format!("Could not recover {}: {error}", item.title));
+                    self.cmdline.say(Wording::new(
+                        key!("Could not recover %{name}: %{error}"),
+                        &[("name", &item.title), ("error", &error.to_string())],
+                    ));
                     self.recovery_report
                         .failed
                         .push((item.title.clone(), error.to_string()));
@@ -140,16 +150,20 @@ impl AppState {
         }
         orphan.discard();
         self.recovery_report.recovered += recovered;
-        self.message = format!(
-            "Recovered {}{}",
-            crate::text::plural(recovered, "unsaved drawing"),
-            if failed > 0 {
-                format!(", {failed} could not be read")
-            } else {
-                String::new()
-            }
+        let drawings = Wording::count(
+            recovered,
+            key!("%{count} unsaved drawing"),
+            key!("%{count} unsaved drawings"),
         );
-        self.cmdline.say(self.message.clone());
+        let said = if failed > 0 {
+            Wording::new(
+                key!("Recovered %{drawings}, %{failed} could not be read"),
+                &[("failed", &failed.to_string())],
+            )
+        } else {
+            Wording::new(key!("Recovered %{drawings}"), &[])
+        };
+        self.tell(said.part("drawings", drawings));
     }
 
     /// Delete the recovery copies of session `index` for good.

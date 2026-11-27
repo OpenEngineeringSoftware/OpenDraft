@@ -167,6 +167,7 @@ mod picker;
 mod plot_controls;
 mod plot_job;
 mod plot_line;
+mod plot_line_said;
 mod plot_pick;
 mod plot_run;
 mod plot_state;

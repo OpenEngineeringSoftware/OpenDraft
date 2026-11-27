@@ -42,6 +42,29 @@ pub enum SysVarError {
     Rejected(String),
 }
 
+impl SysVarError {
+    /// The message, translated where it is shown (issue #138).
+    pub fn wording(&self) -> crate::Wording {
+        use crate::Wording;
+        use opendraft_core::key;
+        match self {
+            SysVarError::Unknown(name) => Wording::new(
+                key!("Unknown variable name \"%{name}\"."),
+                &[("name", name)],
+            ),
+            SysVarError::ReadOnly(name) => {
+                Wording::new(key!("%{name} is read-only."), &[("name", name)])
+            }
+            SysVarError::NotAnInteger => Wording::plain(key!("Requires an integer value.")),
+            SysVarError::NotANumber => Wording::plain(key!("Requires a numeric value.")),
+            SysVarError::OutOfRange(range) => {
+                Wording::new(key!("Requires a value %{range}."), &[("range", range)])
+            }
+            SysVarError::Rejected(why) => Wording::plain(why.as_str()),
+        }
+    }
+}
+
 impl fmt::Display for SysVarError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

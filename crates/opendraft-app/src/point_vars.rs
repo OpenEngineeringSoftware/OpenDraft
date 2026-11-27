@@ -5,6 +5,8 @@ use opendraft_commands::{SetPointStyle, SysVar, Value};
 use opendraft_core::PointStyle;
 
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 impl AppState {
     /// The active drawing's `PDMODE` and `PDSIZE`.
@@ -19,7 +21,13 @@ impl AppState {
             return;
         }
         self.perform(SetPointStyle::new(style));
-        self.message = format!("PDMODE {} PDSIZE {}", style.mode, style.size);
+        self.set_message(Wording::new(
+            "PDMODE %{mode} PDSIZE %{size}",
+            &[
+                ("mode", &style.mode.to_string()),
+                ("size", &style.size.to_string()),
+            ],
+        ));
     }
 }
 
@@ -78,7 +86,7 @@ pub fn variables() -> Vec<SysVar<AppState>> {
                     _ => -1,
                 };
                 if !PointStyle::valid_mode(mode) {
-                    return Err("PDMODE is 0 to 4, plus 32 and 64 for a circle and a square".into());
+                    return Err(key!("PDMODE is 0 to 4, plus 32 and 64 for a circle and a square").into());
                 }
                 let style = s.point_style();
                 s.set_point_style(PointStyle { mode, ..style });

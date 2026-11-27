@@ -25,12 +25,12 @@ pub enum HatchError {
 impl fmt::Display for HatchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NonFinite => write!(f, "a number in the hatch is not usable"),
+            Self::NonFinite => f.write_str(key!("a number in the hatch is not usable")),
             Self::TooLarge(what) => write!(f, "the hatch has too many {what}"),
             Self::OpenLoop(i) => write!(f, "boundary {} is not closed", i + 1),
             Self::BadLoop(i, why) => write!(f, "boundary {} is not valid: {why}", i + 1),
-            Self::PatternSpacing => write!(f, "a pattern line has no spacing"),
-            Self::PatternDashes => write!(f, "a pattern line has no dash length"),
+            Self::PatternSpacing => f.write_str(key!("a pattern line has no spacing")),
+            Self::PatternDashes => f.write_str(key!("a pattern line has no dash length")),
             Self::TooDense { estimated, limit } => write!(
                 f,
                 "the pattern is too dense: about {estimated} lines against a limit of {limit}"

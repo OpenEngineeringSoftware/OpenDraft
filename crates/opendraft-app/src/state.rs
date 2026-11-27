@@ -14,10 +14,11 @@ use crate::properties::{self, Field};
 use crate::recent::RecentFiles;
 use crate::recovery::{Orphan, Recovery};
 use crate::settings::Settings;
-use crate::text::plural;
 use opendraft_canvas::{RegionSelect, View};
+use opendraft_commands::Wording;
 use opendraft_commands::{Action, ModifyEntities, Runner, Session};
 use opendraft_core::{EntityId, EntityKind, Point};
+use opendraft_ui::key;
 
 /// One open drawing.
 pub struct Doc {
@@ -322,7 +323,8 @@ impl AppState {
                 Some(next) if next != *old => changes.push((id, next)),
                 Some(_) => {}
                 None => {
-                    self.message = format!("{label} must be a number above zero");
+                    let said = Wording::new(key!("%{label} must be a number above zero"), &[]);
+                    self.set_message(said.part("label", Wording::plain(label)));
                     return;
                 }
             }
@@ -330,27 +332,22 @@ impl AppState {
         if changes.is_empty() {
             return;
         }
-        self.message = format!(
-            "{label} set to {}",
-            properties::format(doc.session.document().units(), field.unit(), new)
-        );
+        let value = properties::format(doc.session.document().units(), field.unit(), new);
         doc.session
             .perform(ModifyEntities::new(format!("Change {label}"), changes));
+        let said = Wording::new(key!("%{label} set to %{value}"), &[("value", &value)]);
+        self.set_message(said.part("label", Wording::plain(label)));
     }
 
     /// Select what a finished region (box, polygon or fence) covers.
     pub fn apply_region(&mut self, found: RegionSelect) {
         let hits = opendraft_canvas::select_in(self.session().document(), &found.region);
-        self.message = format!(
-            "{} {}",
-            plural(hits.len(), "object"),
-            if found.remove {
-                "deselected"
-            } else {
-                "selected"
-            }
-        );
-        self.cmdline.say(self.message.clone());
+        let text = if found.remove {
+            key!("%{objects} deselected")
+        } else {
+            key!("%{objects} selected")
+        };
+        self.tell(Wording::new(text, &[]).part("objects", crate::text::objects(hits.len())));
         self.select_ids(hits, found.remove);
     }
 
@@ -387,7 +384,7 @@ impl AppState {
         if self.command_running() {
             self.esc_in_command();
         } else if self.end_sysvar_prompt() {
-            self.cmdline.say("*Cancel*");
+            self.cmdline.say(key!("*Cancel*"));
         } else if self.file_work_stalled() {
             self.cancel_file_work();
         } else if self.clear_warm_grips() {

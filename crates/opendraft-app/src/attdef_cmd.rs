@@ -13,6 +13,7 @@ use opendraft_ui::key;
 
 use crate::attribute_memory::Memory;
 use crate::defaults::EditorDefaults;
+use opendraft_commands::Wording;
 
 /// Mode names in the order the prompt lists them, with their keys.
 const MODES: [(&str, &str, u16); 4] = [
@@ -46,7 +47,10 @@ fn ask_modes(ed: &Editor) -> Result<Memory, Cancelled> {
     let defaults = ed.defaults();
     let mut memory = defaults.attribute.get();
     loop {
-        ed.say(format!("Current attribute modes: {}", describe(&memory)));
+        ed.say(Wording::new(
+            key!("Current attribute modes: %{modes}"),
+            &[("modes", &describe(&memory))],
+        ));
         let mut options = Options::<String>::new(key!("Enter an option to change <done>"));
         for (name, key, _) in MODES {
             options = options.keyword(name, key);
@@ -138,7 +142,7 @@ pub fn define_attribute(ed: &mut Editor) -> Result<(), Cancelled> {
             .base(at),
     )?;
     if !(height.is_finite() && height > 0.0) {
-        ed.say("The text height must be above zero.");
+        ed.say(key!("The text height must be above zero."));
         return Ok(());
     }
     ed.defaults().text.change(|m| m.height = height);

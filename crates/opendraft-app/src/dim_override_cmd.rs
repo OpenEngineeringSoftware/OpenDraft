@@ -6,7 +6,7 @@ use opendraft_commands::{Answer, Cancelled, Editor, Options};
 use opendraft_core::{AngleFormat, Arrow, DimStyle, Entity, EntityId, LengthFormat};
 use opendraft_ui::key;
 
-use crate::text::plural;
+use opendraft_commands::Wording;
 
 /// Set the variable `name` (as `DIMTXT`, ignoring case) of `style` to the
 /// typed `value`.
@@ -18,14 +18,14 @@ pub fn set_variable(style: &mut DimStyle, name: &str, value: &str) -> Result<(),
             .parse::<f64>()
             .ok()
             .filter(|n| n.is_finite())
-            .ok_or_else(|| "Requires a number.".to_owned())
+            .ok_or_else(|| key!("Requires a number.").to_owned())
     };
     let size = || {
         number().and_then(|n| {
             if n >= 0.0 {
                 Ok(n)
             } else {
-                Err("Requires a value of zero or more.".to_owned())
+                Err(key!("Requires a value of zero or more.").to_owned())
             }
         })
     };
@@ -45,7 +45,7 @@ pub fn set_variable(style: &mut DimStyle, name: &str, value: &str) -> Result<(),
                 if n > 0.0 {
                     Ok(n)
                 } else {
-                    Err("Requires a value above zero.".to_owned())
+                    Err(key!("Requires a value above zero.").to_owned())
                 }
             })?
         }
@@ -57,7 +57,7 @@ pub fn set_variable(style: &mut DimStyle, name: &str, value: &str) -> Result<(),
                 if n > 0.0 {
                     Ok(n)
                 } else {
-                    Err("Requires a value above zero.".to_owned())
+                    Err(key!("Requires a value above zero.").to_owned())
                 }
             })?
         }
@@ -70,7 +70,7 @@ pub fn set_variable(style: &mut DimStyle, name: &str, value: &str) -> Result<(),
                 if n != 0.0 {
                     Ok(n)
                 } else {
-                    Err("Requires a value other than zero.".to_owned())
+                    Err(key!("Requires a value other than zero.").to_owned())
                 }
             })?
         }
@@ -98,7 +98,7 @@ pub fn set_variable(style: &mut DimStyle, name: &str, value: &str) -> Result<(),
                 if n > 0.0 {
                     Ok(n)
                 } else {
-                    Err("Requires a value above zero.".to_owned())
+                    Err(key!("Requires a value above zero.").to_owned())
                 }
             })?
         }
@@ -108,7 +108,7 @@ pub fn set_variable(style: &mut DimStyle, name: &str, value: &str) -> Result<(),
                 if n != 0.0 {
                     Ok(n)
                 } else {
-                    Err("Requires a value other than zero.".to_owned())
+                    Err(key!("Requires a value other than zero.").to_owned())
                 }
             })?
         }
@@ -138,7 +138,7 @@ pub fn set_variable(style: &mut DimStyle, name: &str, value: &str) -> Result<(),
             style.length_format = number()
                 .ok()
                 .and_then(|n| LengthFormat::from_code(n as i64))
-                .ok_or_else(|| "Requires a whole number from 1 to 5.".to_owned())?
+                .ok_or_else(|| key!("Requires a whole number from 1 to 5.").to_owned())?
         }
         "DIMPOST" => {
             style.post = if value == "." {
@@ -151,7 +151,7 @@ pub fn set_variable(style: &mut DimStyle, name: &str, value: &str) -> Result<(),
             let mut chars = value.chars();
             match (chars.next(), chars.next()) {
                 (Some(c), None) => style.decimal_separator = c,
-                _ => return Err("Requires a single character.".to_owned()),
+                _ => return Err(key!("Requires a single character.").to_owned()),
             }
         }
         "DIMBLK" => {
@@ -160,7 +160,7 @@ pub fn set_variable(style: &mut DimStyle, name: &str, value: &str) -> Result<(),
                 "_OPEN" => Arrow::Open,
                 "_ARCHTICK" => Arrow::Tick,
                 "_NONE" => Arrow::None,
-                _ => return Err("Use . _OPEN _ARCHTICK or _NONE.".to_owned()),
+                _ => return Err(key!("Use . _OPEN _ARCHTICK or _NONE.").to_owned()),
             }
         }
         _ => {
@@ -179,7 +179,7 @@ fn dimensions_in(ed: &Editor, ids: Vec<EntityId>) -> Result<Vec<EntityId>, Cance
             .collect::<Vec<_>>()
     })?;
     if found.is_empty() {
-        ed.say("No dimensions selected.");
+        ed.say(key!("No dimensions selected."));
         return Err(Cancelled);
     }
     Ok(found)
@@ -214,7 +214,11 @@ fn restyle(
         }
         Ok(changed)
     })?;
-    ed.say(format!("{} changed.", plural(changed, "dimension")));
+    ed.say(Wording::count(
+        changed,
+        key!("%{count} dimension changed."),
+        key!("%{count} dimensions changed."),
+    ));
     Ok(())
 }
 

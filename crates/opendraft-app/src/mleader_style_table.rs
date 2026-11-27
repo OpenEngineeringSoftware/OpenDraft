@@ -6,6 +6,8 @@ use opendraft_core::text_style::MAX_NAME_BYTES;
 use opendraft_core::{Entity, EntityId, MLeaderStyle, MLeaderStyleId};
 
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// Which style the Modify Multileader Style dialog is editing.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -39,9 +41,9 @@ pub fn name_problem(
 ) -> Option<String> {
     let name = name.trim();
     if name.is_empty() {
-        Some("Type a name.".to_owned())
+        Some(key!("Type a name.").to_owned())
     } else if name.len() > MAX_NAME_BYTES {
-        Some("That name is too long.".to_owned())
+        Some(key!("That name is too long.").to_owned())
     } else if styles
         .iter()
         .any(|s| s.name.eq_ignore_ascii_case(name) && Some(s.id) != ignoring)
@@ -97,7 +99,10 @@ impl AppState {
         let name = style.name.clone();
         let (table, next) = (doc.mleader_styles().to_vec(), doc.next_mleader_style_id());
         self.commit_mleader_styles("Set current multileader style", table, id, next, Vec::new());
-        self.message = format!("Current multileader style is {name}");
+        self.set_message(Wording::new(
+            key!("Current multileader style is %{name}"),
+            &[("name", &name)],
+        ));
     }
 
     /// Whether `style` could go in the table: it could exist and writes in a
@@ -105,9 +110,9 @@ impl AppState {
     fn usable(&self, style: &MLeaderStyle) -> Result<(), String> {
         let doc = self.session().document();
         if doc.text_style(style.content.text_style).is_none() {
-            Err("The text style no longer exists.".to_owned())
+            Err(key!("The text style no longer exists.").to_owned())
         } else if !style.is_valid() {
-            Err("The style has a value that is out of range.".to_owned())
+            Err(key!("The style has a value that is out of range.").to_owned())
         } else {
             Ok(())
         }
@@ -137,7 +142,10 @@ impl AppState {
             id.0 + 1,
             Vec::new(),
         );
-        self.message = format!("Multileader style {name} created");
+        self.set_message(Wording::new(
+            key!("Multileader style %{name} created"),
+            &[("name", &name)],
+        ));
         Ok(())
     }
 
@@ -165,21 +173,21 @@ impl AppState {
         table[slot] = style;
         let (current, next) = (doc.current_mleader_style(), doc.next_mleader_style_id());
         self.commit_mleader_styles("Modify multileader style", table, current, next, edits);
-        self.message = "Multileader style changed".to_owned();
+        self.message = key!("Multileader style changed").to_owned();
     }
 
     /// Give a style another name. Standard stays.
     pub fn rename_mleader_style(&mut self, id: MLeaderStyleId, to: &str) -> Result<(), String> {
         let doc = self.session().document();
         if id == MLeaderStyleId::STANDARD {
-            return Err("Standard cannot be renamed.".to_owned());
+            return Err(key!("Standard cannot be renamed.").to_owned());
         }
         if let Some(problem) = name_problem(doc.mleader_styles(), to, Some(id)) {
             return Err(problem);
         }
         let mut table = doc.mleader_styles().to_vec();
         let Some(style) = table.iter_mut().find(|s| s.id == id) else {
-            return Err("There is no such multileader style.".to_owned());
+            return Err(key!("There is no such multileader style.").to_owned());
         };
         let from = std::mem::replace(&mut style.name, to.trim().to_owned());
         let edits = doc.restyled_mleaders(&from, style);
@@ -201,10 +209,10 @@ impl AppState {
 
     pub fn delete_mleader_style(&mut self, id: MLeaderStyleId) -> Result<(), String> {
         if !self.can_delete_mleader_style(id) {
-            return Err(
+            return Err(key!(
                 "Standard, the current style and a style that multileaders use cannot be deleted."
-                    .to_owned(),
-            );
+            )
+            .to_owned());
         }
         let doc = self.session().document();
         let mut table = doc.mleader_styles().to_vec();

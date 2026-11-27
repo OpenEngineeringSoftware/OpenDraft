@@ -75,7 +75,7 @@ pub fn draw_leader(ed: &mut Editor) -> Result<(), Cancelled> {
             .ghost(move |at| ghost(&shown, &so_far, at));
         match ed.ask_point(options)? {
             Answer::Value(at) if same(at, points[points.len() - 1]) => {
-                ed.say("That point is where the last one is.");
+                ed.say(key!("That point is where the last one is."));
             }
             Answer::Value(at) => {
                 points.push(at);
@@ -87,7 +87,7 @@ pub fn draw_leader(ed: &mut Editor) -> Result<(), Cancelled> {
                 if points.len() > 1 {
                     points.pop();
                 } else {
-                    ed.say("There is nothing to undo.");
+                    ed.say(key!("There is nothing to undo."));
                 }
             }
             Answer::Enter if points.len() >= 2 => break,

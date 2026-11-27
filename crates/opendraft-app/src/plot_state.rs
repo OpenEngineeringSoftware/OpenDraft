@@ -5,6 +5,7 @@
 use opendraft_core::plot::PlotSpace;
 
 use crate::state::AppState;
+use opendraft_ui::key;
 
 /// The file formats of OpenDraft's own plot devices.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -71,7 +72,7 @@ impl AppState {
             PlotSpace::Layout(id) => doc.session.document().layout(id).map(|l| l.name.clone()),
         };
         let Some(name) = name else {
-            self.message = "That layout is gone".to_owned();
+            self.message = key!("That layout is gone").to_owned();
             return false;
         };
         let suggested = format!("{}-{}.{}", doc.title, name, format.extension());

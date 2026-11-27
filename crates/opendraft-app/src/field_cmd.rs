@@ -11,7 +11,7 @@ use opendraft_core::Entity;
 use opendraft_ui::key;
 
 use crate::attribute_edit::pick_attributed_insert;
-use crate::text::plural;
+use opendraft_commands::Wording;
 
 /// What the drawing knows about itself that a field may show, as the command
 /// was started with it.
@@ -38,21 +38,28 @@ pub fn update_field(ed: &mut Editor) -> Result<(), Cancelled> {
     let context = field_context(ed);
     let update = ed.read(move |doc| update_fields(doc, &ids, &context))?;
     if update.found == 0 {
-        ed.say("No data fields in the selected objects.");
+        ed.say(key!("No data fields in the selected objects."));
         return Ok(());
     }
-    let mut report = format!(
-        "{} found, {} updated",
-        plural(update.found, "field"),
-        update.changed
+    let fields = Wording::count(
+        update.found,
+        key!("%{count} field"),
+        key!("%{count} fields"),
     );
-    if update.failed > 0 {
-        report.push_str(&format!(
-            ", {} could not be evaluated and keep their last value",
-            update.failed
-        ));
-    }
-    ed.say(format!("{report}."));
+    let changed = update.changed.to_string();
+    let report = if update.failed > 0 {
+        let failed = update.failed.to_string();
+        Wording::new(
+            key!("%{fields} found, %{changed} updated, %{failed} could not be evaluated and keep their last value."),
+            &[("changed", &changed), ("failed", &failed)],
+        )
+    } else {
+        Wording::new(
+            key!("%{fields} found, %{changed} updated."),
+            &[("changed", &changed)],
+        )
+    };
+    ed.say(report.part("fields", fields));
     let edits = update.edits;
     if edits.is_empty() {
         return Ok(());
@@ -84,7 +91,7 @@ fn ask_tag(ed: &Editor, tags: &[String]) -> Result<usize, Cancelled> {
             .position(|t| t.eq_ignore_ascii_case(typed.trim()))
         {
             Some(at) => return Ok(at),
-            None => ed.say("No attribute has that tag."),
+            None => ed.say(key!("No attribute has that tag.")),
         }
     }
 }
@@ -142,7 +149,10 @@ pub fn insert_field(ed: &mut Editor) -> Result<(), Cancelled> {
         tx.modify(id, |_| Entity::Insert(Box::new(insert.clone())));
         Ok(())
     })?;
-    ed.say(format!("{tag} now shows {shown}."));
+    ed.say(Wording::new(
+        key!("%{tag} now shows %{shown}."),
+        &[("tag", &tag), ("shown", &shown)],
+    ));
     Ok(())
 }
 

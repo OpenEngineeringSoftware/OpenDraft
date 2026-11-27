@@ -65,7 +65,7 @@ fn rays(ed: &mut Editor) -> Result<Rays, Cancelled> {
             }
             other => {
                 let Some(first) = object_ends(&other, picked.at) else {
-                    ed.say("Select an arc, a circle or a line.");
+                    ed.say(key!("Select an arc, a circle or a line."));
                     continue;
                 };
                 return second_line(ed, first);
@@ -80,7 +80,7 @@ fn second_line(ed: &mut Editor, first: (Point, Point)) -> Result<Rays, Cancelled
             return Err(Cancelled);
         };
         let Some(second) = object_ends(&entity, picked.at) else {
-            ed.say("Select a line.");
+            ed.say(key!("Select a line."));
             continue;
         };
         match lines_angle_points(first, second) {
@@ -93,7 +93,7 @@ fn second_line(ed: &mut Editor, first: (Point, Point)) -> Result<Rays, Cancelled
                     span: None,
                 })
             }
-            None => ed.say("The lines are parallel."),
+            None => ed.say(key!("The lines are parallel.")),
         }
     }
 }

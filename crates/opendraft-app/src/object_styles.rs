@@ -7,6 +7,8 @@ use opendraft_core::Entity;
 
 use crate::state::AppState;
 use crate::style_rows::StyleEdit;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 impl AppState {
     /// Give every selected dimension the dimension style called `name`, or
@@ -16,9 +18,15 @@ impl AppState {
         self.interrupt_command();
         let doc = &mut self.docs[self.active];
         let document = doc.session.document();
-        let label = match edit {
-            StyleEdit::Dimension(_) => "dimension style",
-            StyleEdit::Text(_) => "text style",
+        let (label, text) = match edit {
+            StyleEdit::Dimension(_) => (
+                "dimension style",
+                key!("Changed the dimension style of %{count} objects"),
+            ),
+            StyleEdit::Text(_) => (
+                "text style",
+                key!("Changed the text style of %{count} objects"),
+            ),
         };
         let mut changes = Vec::new();
         for &id in &doc.selection {
@@ -49,9 +57,10 @@ impl AppState {
         if changes.is_empty() {
             return;
         }
-        self.message = format!("Changed the {label} of {} objects", changes.len());
+        let count = changes.len().to_string();
         doc.session
             .perform(ModifyEntities::new(format!("Change {label}"), changes));
+        self.set_message(Wording::new(text, &[("count", &count)]));
     }
 }
 

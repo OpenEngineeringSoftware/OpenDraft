@@ -5,6 +5,8 @@
 //! hook run, so a terminal still shows it. A panic inside a command is caught
 //! and the drawing carries on, but it is logged here too.
 
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 use std::panic;
 use std::path::{Path, PathBuf};
 
@@ -99,8 +101,10 @@ fn install_at(path: PathBuf) {
 fn to_reveal(log: Option<&Path>) -> Result<&Path, &'static str> {
     match log {
         Some(path) if path.is_file() => Ok(path),
-        Some(_) => Err("No crash log: OpenDraft has not recorded a crash"),
-        None => Err("This profile has no data folder, so no crash log is kept"),
+        Some(_) => Err(key!("No crash log: OpenDraft has not recorded a crash")),
+        None => Err(key!(
+            "This profile has no data folder, so no crash log is kept"
+        )),
     }
 }
 
@@ -111,7 +115,13 @@ impl crate::state::AppState {
         match to_reveal(path.as_deref()) {
             Ok(log) => {
                 if let Err(error) = crate::reveal::show_in_folder(log) {
-                    self.tell(format!("Could not show {}: {error}", log.display()));
+                    self.tell(Wording::new(
+                        key!("Could not show %{name}: %{error}"),
+                        &[
+                            ("name", &log.display().to_string()),
+                            ("error", &error.to_string()),
+                        ],
+                    ));
                 }
             }
             Err(message) => self.tell(message.to_owned()),

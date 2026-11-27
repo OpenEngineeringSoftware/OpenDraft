@@ -9,7 +9,7 @@ use opendraft_core::EntityId;
 use opendraft_ui::key;
 
 use crate::defaults::EditorDefaults;
-use crate::text::plural;
+use opendraft_commands::Wording;
 
 /// OVERKILL: select the objects (or use those already selected), then the
 /// Object Comparison Settings dialog opens; OK tidies them. Objects only
@@ -30,20 +30,24 @@ pub(crate) fn run(
 ) -> Result<(), Cancelled> {
     let prepared = ed.read(move |doc| prepare(doc, &chosen, &settings, false))?;
     if prepared.skipped > 0 {
-        ed.say(format!(
-            "{} on locked or hidden layers left alone.",
-            plural(prepared.skipped, "object")
+        ed.say(Wording::count(
+            prepared.skipped,
+            key!("%{count} object on locked or hidden layers left alone."),
+            key!("%{count} objects on locked or hidden layers left alone."),
         ));
     }
     let outcome = match overkill(&prepared.items, &settings) {
         Ok(outcome) => outcome,
         Err(why) => {
-            ed.say(format!("OVERKILL did nothing: {why}."));
+            ed.say(crate::message_language::because(
+                key!("OVERKILL did nothing: %{why}."),
+                why,
+            ));
             return Ok(());
         }
     };
     if outcome.removed.is_empty() && outcome.changed.is_empty() {
-        ed.say("No duplicate or overlapping objects found.");
+        ed.say(key!("No duplicate or overlapping objects found."));
         return Ok(());
     }
     let merged = outcome.changed.len();
@@ -65,15 +69,14 @@ pub(crate) fn run(
         }
         Ok(())
     })?;
-    ed.say(format!(
-        "{} deleted, {} combined.",
-        plural(deleted, "object"),
-        plural(merged, "object")
-    ));
+    let said = Wording::new(key!("%{deleted} deleted, %{merged} combined."), &[]);
+    let said = said.part("deleted", crate::text::objects(deleted));
+    ed.say(said.part("merged", crate::text::objects(merged)));
     if tied > 0 {
-        ed.say(format!(
-            "{} that other objects are tied to were not deleted or changed.",
-            plural(tied, "object")
+        ed.say(Wording::count(
+            tied,
+            key!("%{count} object that other objects are tied to was not deleted or changed."),
+            key!("%{count} objects that other objects are tied to were not deleted or changed."),
         ));
     }
     Ok(())

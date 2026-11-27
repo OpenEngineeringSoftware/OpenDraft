@@ -10,6 +10,7 @@ use opendraft_ui::key;
 
 use crate::defaults::EditorDefaults;
 use crate::draw::{add, MIN_SIZE};
+use opendraft_commands::Wording;
 
 const JUSTIFY: [(&str, &str, TextHorizontal, TextVertical); 13] = [
     ("Left", "L", TextHorizontal::Left, TextVertical::Baseline),
@@ -79,7 +80,10 @@ fn choose_style(ed: &Editor, current: TextStyleId) -> Result<TextStyleId, Cancel
         if let Some(id) = ed.read(move |doc| doc.text_style_named(&key).map(|s| s.id))? {
             return Ok(id);
         }
-        ed.say(format!("Text style \"{}\" does not exist.", name.trim()));
+        ed.say(Wording::new(
+            key!("Text style \"%{name}\" does not exist."),
+            &[("name", name.trim())],
+        ));
     }
 }
 
@@ -116,7 +120,7 @@ fn ask_start(ed: &Editor) -> Result<Start, Cancelled> {
             if (point.x - at.x).hypot(point.y - at.y) > MIN_SIZE {
                 break point;
             }
-            ed.say("Requires a point different from the first endpoint.");
+            ed.say(key!("Requires a point different from the first endpoint."));
         })
     } else {
         None
@@ -150,7 +154,7 @@ fn ask_height(ed: &Editor, start: &Start, rubber_band: bool) -> Result<f64, Canc
                 ed.defaults().text.change(|m| m.height = height);
                 return Ok(height);
             }
-            ed.say("Requires a positive value.");
+            ed.say(key!("Requires a positive value."));
         },
     }
 }

@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 
 use crate::files::display_name;
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// Files bigger than this are asked about before they are read.
 pub(crate) const WARN_BYTES: u64 = 20 * 1024 * 1024;
@@ -62,7 +64,10 @@ impl AppState {
         if open {
             self.begin_open(&held.path);
         } else {
-            self.message = format!("Did not open {}", held.name());
+            self.set_message(Wording::new(
+                key!("Did not open %{name}"),
+                &[("name", &held.name())],
+            ));
         }
     }
 }

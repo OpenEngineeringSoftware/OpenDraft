@@ -43,7 +43,7 @@ impl Document {
     ) -> Result<BlockEditSave, &'static str> {
         let old = self
             .block(id)
-            .ok_or("The block being edited is no longer in the drawing.")?;
+            .ok_or(key!("The block being edited is no longer in the drawing."))?;
         let mut work = self.clone();
         let (mut new_layers, mut changed_layers) = (Vec::new(), Vec::new());
         for layer in editor.layers() {
@@ -77,7 +77,7 @@ impl Document {
                 pruned
                     .schema
                     .check(&ids)
-                    .map_err(|_| "The block's parameters and actions are not valid.")?;
+                    .map_err(|_| key!("The block's parameters and actions are not valid."))?;
                 (notes, removed_actions) = (pruned.notes, pruned.removed);
                 Some(Box::new(pruned.schema))
             }
@@ -107,7 +107,7 @@ impl Document {
             }
         }
         if work.validate().is_err() {
-            return Err("The block cannot be saved: it uses something the drawing does not have, such as two layers with one name.");
+            return Err(key!("The block cannot be saved: it uses something the drawing does not have, such as two layers with one name."));
         }
         let objects: Vec<(EntityId, Entity)> = work
             .objects()

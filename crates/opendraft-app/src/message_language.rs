@@ -5,10 +5,17 @@
 use opendraft_commands::Wording;
 
 use crate::state::AppState;
+use opendraft_ui::key;
 
 /// A message in the language of the interface.
 pub fn shown(wording: &Wording) -> String {
     wording.shown(&|text| rust_i18n::t!(text))
+}
+
+/// `text` with its field `%{why}` filled by `why`, a reason that is
+/// translated with it when it is a translated text itself.
+pub fn because(text: &str, why: impl std::fmt::Display) -> Wording {
+    Wording::new(text, &[]).part("why", Wording::plain(why.to_string()))
 }
 
 /// A line said in English, in the language of the interface: by its
@@ -38,6 +45,19 @@ impl AppState {
     pub fn say_step(&mut self, text: &str, name: impl Into<String>) {
         let step = Wording::plain(name.into());
         self.set_message(Wording::new(text, &[]).part("name", step));
+    }
+
+    /// Says in the status bar that the command `id` is not built yet.
+    pub fn say_not_built(&mut self, id: &str) {
+        self.set_message(Wording::new(
+            key!("Not implemented yet: %{id}"),
+            &[("id", id)],
+        ));
+    }
+
+    /// Says in the status bar that the app closes once its files are written.
+    pub fn say_closing_later(&mut self) {
+        self.message = key!("Closing when the files are written...").to_owned();
     }
 
     /// Shows `message` in the status bar.
@@ -101,6 +121,69 @@ mod tests {
         "view_twist_cmd",
         "ccs_cmd",
         "measure_cmd",
+        "attdef_cmd",
+        "attribute_dialog_cmd",
+        "attribute_edit",
+        "attribute_rows",
+        "attribute_sync_cmd",
+        "autosave",
+        "block_cmd",
+        "block_dialog_cmd",
+        "block_editor",
+        "canvas_style",
+        "clipboard",
+        "cmdline",
+        "commands",
+        "crash_log",
+        "dim_override_cmd",
+        "dim_style_table",
+        "dim_vars",
+        "dimension_angular_cmd",
+        "dimension_centre_cmd",
+        "dimension_chain_cmd",
+        "dimension_cmd",
+        "dimension_edit_cmd",
+        "dimension_jogged_cmd",
+        "dimension_space_cmd",
+        "field_cmd",
+        "field_dialog_cmd",
+        "file_io",
+        "files",
+        "hatch_cmd",
+        "hatch_edit",
+        "icon_library",
+        "insert_cmd",
+        "interact",
+        "large_file",
+        "layer_cmd",
+        "layer_switch",
+        "layers",
+        "layout_cmd",
+        "layouts",
+        "leader_cmd",
+        "linetype_vars",
+        "mleader_cmd",
+        "mleader_style_table",
+        "mtext",
+        "object_styles",
+        "overkill_cmd",
+        "overkill_line",
+        "plot_job",
+        "plot_line",
+        "plot_pick",
+        "plot_run",
+        "plot_state",
+        "point_vars",
+        "purge_cmd",
+        "purge_line",
+        "single_line_text_cmd",
+        "state",
+        "sysvar_line",
+        "template_state",
+        "text_edit_cmd",
+        "text_style_draft",
+        "units_state",
+        "view_freeze",
     ];
 
     fn french(wording: &Wording) -> String {
@@ -136,7 +219,7 @@ mod tests {
         let mut unmarked = Vec::new();
         for name in MARKED {
             let text = std::fs::read_to_string(src.join(format!("{name}.rs"))).unwrap();
-            let production = text.split("#[cfg(test)]").next().unwrap_or_default();
+            let production = text.split("mod tests {").next().unwrap_or_default();
             for (no, line) in production.lines().enumerate() {
                 let squeezed: String = line.split_whitespace().collect();
                 if squeezed.contains(".say(\"") || squeezed.contains(".say(format!") {

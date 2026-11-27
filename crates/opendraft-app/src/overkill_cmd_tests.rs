@@ -130,7 +130,7 @@ fn an_object_a_dimension_is_tied_to_is_kept_and_its_copy_goes() {
     assert!(doc.contains(second));
     assert!(said(
         &state,
-        "that other objects are tied to were not deleted"
+        "that other objects are tied to was not deleted"
     ));
 }
 

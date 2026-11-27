@@ -20,11 +20,13 @@ const MAX_NAME: usize = 255;
 /// trailing spaces are not part of a name; callers trim them.
 pub fn block_name_problem(name: &str) -> Option<&'static str> {
     if name.trim().is_empty() {
-        Some("A block name cannot be empty.")
+        Some(key!("A block name cannot be empty."))
     } else if name.chars().count() > MAX_NAME {
-        Some("A block name can be at most 255 characters long.")
+        Some(key!("A block name can be at most 255 characters long."))
     } else if name.contains(FORBIDDEN) {
-        Some("A block name cannot contain < > / \\ \" : ; ? * | , = or `.")
+        Some(key!(
+            "A block name cannot contain < > / \\ \" : ; ? * | , = or `."
+        ))
     } else {
         None
     }
@@ -79,7 +81,7 @@ impl Document {
             .iter()
             .any(|e| matches!(e.entity, Entity::Hatch(_)))
         {
-            return Err("A block cannot hold a hatch yet.");
+            return Err(key!("A block cannot hold a hatch yet."));
         }
         // They have no ends to give the block a size.
         if def
@@ -87,7 +89,7 @@ impl Document {
             .iter()
             .any(|e| matches!(e.entity, Entity::Xline { .. } | Entity::Ray { .. }))
         {
-            return Err("A block cannot hold a construction line or a ray.");
+            return Err(key!("A block cannot hold a construction line or a ray."));
         }
         let loops = def.entities.iter().any(|e| match &e.entity {
             Entity::Insert(i) => self
@@ -96,7 +98,7 @@ impl Document {
             _ => false,
         });
         if loops {
-            return Err("A block cannot contain an insert of itself.");
+            return Err(key!("A block cannot contain an insert of itself."));
         }
         let mut done: HashMap<BlockId, Arc<BlockDef>> = HashMap::new();
         done.insert(target, Arc::new(def));

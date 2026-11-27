@@ -24,7 +24,7 @@ fn pick_object(ed: &mut Editor) -> Result<Option<ObjectChoice>, Cancelled> {
         let (id, context) = (picked.id, field_context(ed));
         match ed.read(move |doc| ObjectChoice::of(doc, id, &context))? {
             Some(choice) if !choice.properties.is_empty() => return Ok(Some(choice)),
-            _ => ed.say("That object has no property a field can show."),
+            _ => ed.say(key!("That object has no property a field can show.")),
         }
     }
 }

@@ -7,6 +7,7 @@ use opendraft_core::text_style::MAX_NAME_BYTES;
 use opendraft_core::{Document, TextStyle, TextStyleId};
 
 use crate::state::AppState;
+use opendraft_ui::key;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Draft {
@@ -47,9 +48,9 @@ impl Draft {
     pub fn name_problem(&self, name: &str) -> Option<String> {
         let name = name.trim();
         if name.is_empty() {
-            Some("Type a name.".to_owned())
+            Some(key!("Type a name.").to_owned())
         } else if name.len() > MAX_NAME_BYTES {
-            Some("That name is too long.".to_owned())
+            Some(key!("That name is too long.").to_owned())
         } else if self
             .styles
             .iter()
@@ -111,7 +112,7 @@ impl AppState {
             draft.current,
             draft.next_id,
         ));
-        self.message = "Text styles changed".to_owned();
+        self.message = key!("Text styles changed").to_owned();
     }
 }
 

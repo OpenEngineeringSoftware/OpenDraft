@@ -16,12 +16,12 @@ pub fn dim_centre(ed: &mut Editor) -> Result<(), Cancelled> {
         };
         let (Entity::Circle { center, radius } | Entity::Arc { center, radius, .. }) = entity
         else {
-            ed.say("Select an arc or a circle.");
+            ed.say(key!("Select an arc or a circle."));
             continue;
         };
         let lines = centre_segments(center, radius, size);
         if lines.is_empty() {
-            ed.say("The centre mark size (DIMCEN) is zero.");
+            ed.say(key!("The centre mark size (DIMCEN) is zero."));
             return Ok(());
         }
         return ed.transaction("Center mark", move |tx| {

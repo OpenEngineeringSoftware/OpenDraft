@@ -22,6 +22,7 @@ use opendraft_ui::Colors;
 use crate::paper_colour::PaperColour;
 use crate::settings::LayoutPaper;
 use crate::state::AppState;
+use opendraft_ui::key;
 
 const AXIS_X: Color32 = Color32::from_rgb(70, 190, 110);
 const AXIS_Y: Color32 = Color32::from_rgb(220, 80, 80);
@@ -47,12 +48,12 @@ pub fn commands() -> Vec<Command<AppState>> {
 }
 
 fn toggle_paper(s: &mut AppState) {
-    let (paper, name) = match s.settings.layout_paper {
-        LayoutPaper::Light => (LayoutPaper::Dark, "dark"),
-        LayoutPaper::Dark => (LayoutPaper::Light, "light"),
+    let (paper, said) = match s.settings.layout_paper {
+        LayoutPaper::Light => (LayoutPaper::Dark, key!("Layouts are shown on dark paper")),
+        LayoutPaper::Dark => (LayoutPaper::Light, key!("Layouts are shown on light paper")),
     };
     s.settings.layout_paper = paper;
-    s.message = format!("Layouts are shown on {name} paper");
+    s.message = said.to_owned();
 }
 
 /// Whether `space` is shown on light paper.

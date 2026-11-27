@@ -154,13 +154,13 @@ impl DefinitionDraft {
             return Some(why.to_owned());
         }
         if !(self.height.is_finite() && self.height > 0.0) {
-            return Some("The text height must be above zero.".to_owned());
+            return Some(key!("The text height must be above zero.").to_owned());
         }
         if !self.rotation.is_finite() {
-            return Some("The rotation is not a number.".to_owned());
+            return Some(key!("The rotation is not a number.").to_owned());
         }
         if !(self.on_screen || (self.x.is_finite() && self.y.is_finite())) {
-            return Some("The insertion point is not a number.".to_owned());
+            return Some(key!("The insertion point is not a number.").to_owned());
         }
         None
     }

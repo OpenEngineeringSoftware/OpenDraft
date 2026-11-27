@@ -7,7 +7,8 @@ use opendraft_commands::{
 use opendraft_core::{Attr, Color, EntityKind, Layer, LayerId, LinetypeId, Lineweight};
 
 use crate::state::AppState;
-use crate::text::plural;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// A switch on a layer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,12 +89,12 @@ pub enum AttrEdit {
 impl AttrEdit {
     fn name(&self) -> &'static str {
         match self {
-            AttrEdit::Layer(_) => "Change layer",
-            AttrEdit::Color(_) => "Change colour",
-            AttrEdit::Linetype(_) => "Change linetype",
-            AttrEdit::Lineweight(_) => "Change lineweight",
-            AttrEdit::LinetypeScale(_) => "Change linetype scale",
-            AttrEdit::LinetypeGeneration(_) => "Change linetype generation",
+            AttrEdit::Layer(_) => key!("Change layer"),
+            AttrEdit::Color(_) => key!("Change colour"),
+            AttrEdit::Linetype(_) => key!("Change linetype"),
+            AttrEdit::Lineweight(_) => key!("Change lineweight"),
+            AttrEdit::LinetypeScale(_) => key!("Change linetype scale"),
+            AttrEdit::LinetypeGeneration(_) => key!("Change linetype generation"),
         }
     }
 }
@@ -136,7 +137,10 @@ impl AppState {
         let doc = &mut self.docs[self.active];
         let id = doc.session.allocate_layer_id();
         let name = doc.session.document().unused_layer_name();
-        self.message = format!("Created layer {name}");
+        self.set_message(Wording::new(
+            key!("Created layer %{name}"),
+            &[("name", &name)],
+        ));
         self.perform(AddLayer::new(Layer::new(id, name)));
         id
     }
@@ -157,17 +161,23 @@ impl AppState {
             if deletable.is_empty() {
                 return;
             }
-            self.message = format!("Deleted {}", plural(deletable.len(), "layer"));
+            self.set_message(
+                Wording::new(key!("Deleted %{layers}"), &[])
+                    .part("layers", layers(deletable.len())),
+            );
             return self.perform(RemoveLayer::many(deletable));
         };
         if deletable.is_empty() {
             self.message = reason.to_owned();
             return;
         }
-        self.message = format!(
-            "Deleted {}; {} kept: {reason}",
-            plural(deletable.len(), "layer"),
-            blocked.len()
+        let said = Wording::new(
+            key!("Deleted %{layers}; %{kept} kept: %{why}"),
+            &[("kept", &blocked.len().to_string())],
+        );
+        self.set_message(
+            said.part("layers", layers(deletable.len()))
+                .part("why", Wording::plain(reason)),
         );
         self.perform(RemoveLayer::many(deletable));
     }
@@ -180,7 +190,10 @@ impl AppState {
         let Some(layer) = document.layer(id) else {
             return;
         };
-        self.message = format!("Current layer: {}", layer.name);
+        self.set_message(Wording::new(
+            key!("Current layer: %{name}"),
+            &[("name", &layer.name)],
+        ));
         self.perform(SetCurrentLayer::new(id));
     }
 
@@ -191,11 +204,14 @@ impl AppState {
             return;
         }
         if id == LayerId::DEFAULT {
-            self.message = "Layer 0 cannot be renamed".to_owned();
+            self.message = key!("Layer 0 cannot be renamed").to_owned();
         } else if name.is_empty() {
-            self.message = "A layer needs a name".to_owned();
+            self.message = key!("A layer needs a name").to_owned();
         } else if document.layer_name_taken(name, Some(id)) {
-            self.message = format!("A layer called {name} already exists");
+            self.set_message(Wording::new(
+                key!("A layer called %{name} already exists"),
+                &[("name", name)],
+            ));
         } else {
             self.edit_layers("Rename layer", [id], |l| l.name = name.to_owned());
         }
@@ -208,7 +224,7 @@ impl AppState {
         };
         let value = !flag.get(layer);
         if flag == LayerFlag::Frozen && value && id == document.current_layer() {
-            self.message = "The current layer cannot be frozen".to_owned();
+            self.message = key!("The current layer cannot be frozen").to_owned();
             return;
         }
         self.edit_layers(flag.action_name(value), [id], |l| flag.set(l, value));
@@ -220,7 +236,7 @@ impl AppState {
         let current = self.session().document().current_layer();
         let skip_current = flag == LayerFlag::Frozen && value && ids.contains(&current);
         if skip_current {
-            self.message = "The current layer cannot be frozen".to_owned();
+            self.message = key!("The current layer cannot be frozen").to_owned();
         }
         let ids = ids
             .iter()
@@ -262,7 +278,7 @@ impl AppState {
             .iter()
             .map(|l| l.id)
             .collect();
-        self.message = "All layers turned on".to_owned();
+        self.message = key!("All layers turned on").to_owned();
         self.edit_layers("Turn layers on", layers, |l| {
             l.on = true;
             l.frozen = false;
@@ -290,7 +306,8 @@ impl AppState {
             AttrEdit::Lineweight(w) => lineweight = w.clone(),
             _ => return,
         }
-        self.message = format!("{} for new objects", edit.name());
+        let said = Wording::new(key!("%{change} for new objects"), &[]);
+        self.set_message(said.part("change", Wording::plain(edit.name())));
         self.perform(SetNewObjectStyle::new(color, linetype, lineweight));
     }
 
@@ -323,9 +340,16 @@ impl AppState {
         if changes.is_empty() {
             return;
         }
-        self.message = format!("{} ({})", edit.name(), plural(changes.len(), "object"));
+        let said = Wording::new("%{change} (%{objects})", &[]);
+        let said = said.part("change", Wording::plain(edit.name()));
+        self.set_message(said.part("objects", crate::text::objects(changes.len())));
         self.perform(ModifyAttributes::new(edit.name(), changes));
     }
+}
+
+/// "1 layer", "3 layers", translated where it is shown.
+fn layers(count: usize) -> Wording {
+    Wording::count(count, key!("%{count} layer"), key!("%{count} layers"))
 }
 
 #[cfg(test)]

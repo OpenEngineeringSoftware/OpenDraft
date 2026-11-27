@@ -23,6 +23,7 @@ use crate::prompt_reply::{
 };
 use crate::state::AppState;
 use crate::units_state::hint_text;
+use opendraft_commands::Wording;
 use opendraft_ui::key;
 
 /// How long to wait, right after an answer, for the command's next prompt.
@@ -264,7 +265,8 @@ impl AppState {
         if let Some(first) = self.once.take_first() {
             self.send(Reply::Point(first));
             if !self.waiting().is_some_and(takes_clicked_points) {
-                self.cmdline.say("That command takes no second point.");
+                self.cmdline
+                    .say(key!("That command takes no second point."));
                 return;
             }
         }
@@ -302,7 +304,7 @@ impl AppState {
             let allow_empty = ask.allow_empty;
             let ids: Vec<_> = self.selection().iter().copied().collect();
             if ids.is_empty() && !allow_empty {
-                self.cmdline.say("Select objects first.");
+                self.cmdline.say(key!("Select objects first."));
                 return;
             }
             self.reply(Reply::Selection(ids));
@@ -404,7 +406,8 @@ impl AppState {
             .unwrap_or(Err("Invalid input for the current prompt."))
         };
         let prompt = self.cmd_prompt().plain();
-        self.cmdline.say(format!("{prompt} {text}"));
+        // The prompt as shown, then what was typed: nothing to translate.
+        self.cmdline.say(Wording::plain(format!("{prompt} {text}")));
         match reply {
             Ok(reply) => {
                 self.reply(reply);

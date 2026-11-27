@@ -13,6 +13,8 @@ use rust_i18n::t;
 use crate::cmdline::Prompt;
 use crate::state::AppState;
 use crate::sysvars::table;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// What the command line is waiting for after `SETVAR` or a variable name.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -70,7 +72,8 @@ impl AppState {
         };
         let text = text.trim();
         let asked = self.sysvar_prompt().map(|p| p.plain()).unwrap_or_default();
-        self.cmdline.say(format!("{asked} {text}"));
+        // An echo of what was typed: nothing to translate.
+        self.cmdline.say(Wording::plain(format!("{asked} {text}")));
         match waiting {
             SysVarPrompt::Name => self.sysvar_name(text),
             SysVarPrompt::Value(name) => {
@@ -80,11 +83,12 @@ impl AppState {
                 }
                 match table().set(name, text, self) {
                     Ok(value) => {
-                        self.cmdline.say(format!("{name} = {value}"));
+                        self.cmdline
+                            .say(Wording::plain(format!("{name} = {value}")));
                         self.cmdline.sysvar = None;
                     }
                     // Ask again, as AutoCAD does.
-                    Err(why) => self.cmdline.say(why.to_string()),
+                    Err(why) => self.cmdline.say(why.wording()),
                 }
             }
         }
@@ -113,8 +117,10 @@ impl AppState {
             };
             let found = table.matching(pattern);
             if found.is_empty() {
-                self.cmdline
-                    .say(format!("No variables match \"{}\".", pattern.trim()));
+                self.cmdline.say(Wording::new(
+                    key!("No variables match \"%{pattern}\"."),
+                    &[("pattern", pattern.trim())],
+                ));
             }
             for var in found {
                 let note = if var.read_only { " (read-only)" } else { "" };
@@ -136,8 +142,10 @@ impl AppState {
                 self.cmdline.sysvar = Some(SysVarPrompt::Value(var.name));
             }
         } else {
-            self.cmdline
-                .say(format!("Unknown variable name \"{text}\"."));
+            self.cmdline.say(Wording::new(
+                key!("Unknown variable name \"%{name}\"."),
+                &[("name", text)],
+            ));
         }
     }
 }

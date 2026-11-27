@@ -8,6 +8,7 @@ use opendraft_ui::key;
 
 use crate::defaults::EditorDefaults;
 use crate::overkill_cmd::run;
+use opendraft_commands::Wording;
 
 fn yes_no(on: bool) -> &'static str {
     if on {
@@ -18,7 +19,7 @@ fn yes_no(on: bool) -> &'static str {
 }
 
 /// The settings in one line, for the command line.
-fn describe(ed: &Editor, s: &Settings) -> Result<String, Cancelled> {
+fn describe(ed: &Editor, s: &Settings) -> Result<Wording, Cancelled> {
     let units = ed.read(|doc| *doc.units())?;
     let names = [
         (s.ignore.color, "Color"),
@@ -28,19 +29,21 @@ fn describe(ed: &Editor, s: &Settings) -> Result<String, Cancelled> {
         (s.ignore.lineweight, "LWeight"),
     ];
     let ignored: Vec<&str> = names.iter().filter(|n| n.0).map(|n| n.1).collect();
-    Ok(format!(
-        "Tolerance = {}, Ignore = {}, Optimize polylines = {}, Combine partial overlap = {}, Combine end to end = {}, Associativity = {}",
-        opendraft_core::units::format_length(&units, s.tolerance),
-        if ignored.is_empty() {
-            "None".to_owned()
-        } else {
-            ignored.join(", ")
-        },
-        yes_no(s.optimize_polylines),
-        yes_no(s.overlapping),
-        yes_no(s.end_to_end),
-        yes_no(s.maintain_associative),
-    ))
+    let ignored = if ignored.is_empty() {
+        key!("None").to_owned()
+    } else {
+        ignored.join(", ")
+    };
+    let yes = |on| Wording::plain(yes_no(on));
+    Ok(Wording::new(
+        key!("Tolerance = %{tolerance}, Ignore = %{ignore}, Optimize polylines = %{optimize}, Combine partial overlap = %{overlap}, Combine end to end = %{ends}, Associativity = %{associative}"),
+        &[("tolerance", &opendraft_core::units::format_length(&units, s.tolerance))],
+    )
+    .part("ignore", Wording::plain(ignored))
+    .part("optimize", yes(s.optimize_polylines))
+    .part("overlap", yes(s.overlapping))
+    .part("ends", yes(s.end_to_end))
+    .part("associative", yes(s.maintain_associative)))
 }
 
 /// Yes or No, with `current` as the default.
@@ -112,7 +115,7 @@ pub fn overkill_prompt(ed: &mut Editor) -> Result<(), Cancelled> {
                 if value.is_finite() && value >= 0.0 {
                     settings.tolerance = value;
                 } else {
-                    ed.say("The tolerance must be zero or more.");
+                    ed.say(key!("The tolerance must be zero or more."));
                 }
             }
             Some(key!("Optimize polylines")) => {

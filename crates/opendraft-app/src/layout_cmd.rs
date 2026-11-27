@@ -11,6 +11,7 @@ use opendraft_core::{
 
 use crate::defaults::EditorDefaults;
 use crate::layouts::with_viewport;
+use opendraft_commands::Wording;
 use opendraft_ui::key;
 
 /// LAYOUT: Copy, Delete, New or Rename a layout, by name. Entering one is
@@ -54,7 +55,9 @@ pub fn layout_command(ed: &mut Editor, current: Option<LayoutId>) -> Result<(), 
                 let id = find(doc, &target)?;
                 let name = checked_name(doc, &name, None)?;
                 let mut layouts = doc.layouts().to_vec();
-                let copy = doc.copied_layout(id, name).ok_or("The layout is gone.")?;
+                let copy = doc
+                    .copied_layout(id, name)
+                    .ok_or(key!("The layout is gone."))?;
                 let drawn = (copy.id, doc.copied_sheet_objects(id));
                 layouts.push(copy);
                 Ok(Edit {
@@ -115,7 +118,7 @@ fn checked_name(
 ) -> Result<String, String> {
     let name = name.trim();
     if name.is_empty() {
-        Err("A layout needs a name.".to_owned())
+        Err(key!("A layout needs a name.").to_owned())
     } else if doc.layout_name_taken(name, except) {
         Err(format!("A layout called \"{name}\" already exists."))
     } else {
@@ -213,7 +216,7 @@ pub fn vplayer(
         let sheet = layouts
             .iter_mut()
             .find(|l| l.id == layout)
-            .ok_or("The layout is gone.")?;
+            .ok_or(key!("The layout is gone."))?;
         for vp in sheet
             .viewports
             .iter_mut()
@@ -245,7 +248,7 @@ fn resolve_layers(doc: &opendraft_core::Document, names: &str) -> Result<Vec<Lay
         found.push(layer.id);
     }
     if found.is_empty() {
-        return Err("Name at least one layer.".to_owned());
+        return Err(key!("Name at least one layer.").to_owned());
     }
     Ok(found)
 }
@@ -256,7 +259,7 @@ pub fn mview(ed: &mut Editor, layout: LayoutId) -> Result<(), Cancelled> {
     let b = ed.get_corner(a, key!("Specify opposite corner"))?;
     let (width, height) = ((b.x - a.x).abs(), (b.y - a.y).abs());
     if width < 1e-6 || height < 1e-6 {
-        ed.say("The viewport needs some size.");
+        ed.say(key!("The viewport needs some size."));
         return Ok(());
     }
     let center = Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
@@ -266,7 +269,7 @@ pub fn mview(ed: &mut Editor, layout: LayoutId) -> Result<(), Cancelled> {
         let sheet = layouts
             .iter_mut()
             .find(|l| l.id == layout)
-            .ok_or("The layout is gone.")?;
+            .ok_or(key!("The layout is gone."))?;
         let viewport =
             Viewport::framing(ViewportId(next), center, width, height, doc.model_bounds());
         sheet.viewports.push(viewport);
@@ -285,7 +288,7 @@ pub fn vpscale(ed: &mut Editor, layout: LayoutId, viewport: ViewportId) -> Resul
         return Ok(());
     };
     if locked {
-        ed.say("The viewport is locked; unlock it with VPLOCK.");
+        ed.say(key!("The viewport is locked; unlock it with VPLOCK."));
         return Ok(());
     }
     let text = ed.ask_string(
@@ -298,13 +301,16 @@ pub fn vpscale(ed: &mut Editor, layout: LayoutId, viewport: ViewportId) -> Resul
         Answer::Keyword(_) => return Err(Cancelled),
     };
     let Some(new_scale) = parse_scale(&text) else {
-        ed.say(format!("\"{}\" is not a scale.", text.trim()));
+        ed.say(Wording::new(
+            key!("\"%{text}\" is not a scale."),
+            &[("text", text.trim())],
+        ));
         return Ok(());
     };
     edit_layouts(ed, "VPSCALE", move |doc| {
         with_viewport(doc.layouts(), layout, viewport, |v| v.scale = new_scale)
             .map(Edit::layouts)
-            .ok_or_else(|| "The viewport is gone.".to_owned())
+            .ok_or_else(|| key!("The viewport is gone.").to_owned())
     })
 }
 

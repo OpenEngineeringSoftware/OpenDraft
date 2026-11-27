@@ -10,7 +10,7 @@ use opendraft_core::{BlockId, Entity, EntityId};
 use opendraft_ui::key;
 
 use crate::attribute_edit::pick_attributed_insert;
-use crate::text::plural;
+use opendraft_commands::Wording;
 
 /// What synchronising a block changes.
 #[derive(Default)]
@@ -86,7 +86,7 @@ fn choose_block(ed: &mut Editor) -> Result<Option<BlockId>, Cancelled> {
                         .collect::<Vec<_>>()
                 })?;
                 if names.is_empty() {
-                    ed.say("No blocks with attributes.");
+                    ed.say(key!("No blocks with attributes."));
                 }
                 for name in names {
                     ed.say(name);
@@ -101,7 +101,7 @@ fn choose_block(ed: &mut Editor) -> Result<Option<BlockId>, Cancelled> {
                 let found = ed.read(move |doc| doc.block_named(&name).map(|b| b.id))?;
                 match found {
                     Some(id) => return Ok(Some(id)),
-                    None => ed.say("Block not found."),
+                    None => ed.say(key!("Block not found.")),
                 }
             }
             _ => {
@@ -120,7 +120,7 @@ pub fn sync_attributes(ed: &mut Editor) -> Result<(), Cancelled> {
     };
     let kept = ed.read(move |doc| plan(doc, block, false))?;
     if kept.inserts == 0 {
-        ed.say("No block references to update.");
+        ed.say(key!("No block references to update."));
         return Ok(());
     }
     let remove = kept.orphaned > 0
@@ -142,20 +142,38 @@ pub fn sync_attributes(ed: &mut Editor) -> Result<(), Cancelled> {
         kept
     };
     if plan.edits.is_empty() {
-        ed.say(format!(
-            "{} already up to date.",
-            plural(plan.inserts, "block reference")
+        ed.say(Wording::count(
+            plan.inserts,
+            key!("%{count} block reference already up to date."),
+            key!("%{count} block references already up to date."),
         ));
         return Ok(());
     }
-    ed.say(format!(
-        "{}: {} kept, {} added, {} {}.",
-        plural(plan.inserts, "block reference"),
-        plural(plan.matched, "attribute"),
-        plan.added,
-        plan.orphaned,
-        if remove { "removed" } else { "kept as extra" },
-    ));
+    let text = if remove {
+        key!("%{references}: %{kept} kept, %{added} added, %{orphaned} removed.")
+    } else {
+        key!("%{references}: %{kept} kept, %{added} added, %{orphaned} kept as extra.")
+    };
+    let counts = [
+        ("added", plan.added.to_string()),
+        ("orphaned", plan.orphaned.to_string()),
+    ];
+    let counts: Vec<(&str, &str)> = counts.iter().map(|(n, v)| (*n, v.as_str())).collect();
+    let references = Wording::count(
+        plan.inserts,
+        key!("%{count} block reference"),
+        key!("%{count} block references"),
+    );
+    let kept = Wording::count(
+        plan.matched,
+        key!("%{count} attribute"),
+        key!("%{count} attributes"),
+    );
+    ed.say(
+        Wording::new(text, &counts)
+            .part("references", references)
+            .part("kept", kept),
+    );
     if !ask_yes_no(
         ed,
         Options::new(key!("Settings changed on a reference are lost. Update?")),

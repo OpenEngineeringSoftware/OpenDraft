@@ -8,6 +8,8 @@ use opendraft_commands::Session;
 
 use crate::picker::FilePicker;
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// The picker a new `AppState` starts with: the real dialogs, or in tests one
 /// that always says the user cancelled.
@@ -136,7 +138,11 @@ impl AppState {
             self.active = i;
             self.home = false;
             self.commit_recent(path);
-            self.message = format!("{} is already open", self.docs[i].title);
+            let said = Wording::new(
+                key!("%{name} is already open"),
+                &[("name", &self.docs[i].title)],
+            );
+            self.set_message(said);
             return true;
         }
         if !self.hold_if_large(path) {

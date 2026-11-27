@@ -13,6 +13,8 @@ use opendraft_ui::Theme;
 
 use crate::properties_ui::{row_frame, text_cell};
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// One row: a tag and what its attribute holds.
 #[derive(Clone, Debug, PartialEq)]
@@ -144,9 +146,12 @@ impl AppState {
         if changes.is_empty() {
             return;
         }
-        self.message = format!("Changed the attribute {tag}");
         doc.session
             .perform(ModifyEntities::new("Edit attribute", changes));
+        self.set_message(Wording::new(
+            key!("Changed the attribute %{tag}"),
+            &[("tag", tag)],
+        ));
     }
 }
 

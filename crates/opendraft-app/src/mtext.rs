@@ -87,7 +87,7 @@ pub fn draw_mtext(ed: &mut Editor) -> Result<(), Cancelled> {
                         height = value;
                         ed.defaults().text.change(|m| m.height = value);
                     } else {
-                        ed.say("Requires a positive value.");
+                        ed.say(key!("Requires a positive value."));
                     }
                 }
                 "Justify" => {
@@ -148,7 +148,7 @@ fn pick_text(ed: &mut Editor) -> Result<opendraft_core::EntityId, Cancelled> {
         if is_text(ed, picked.id)? {
             return Ok(picked.id);
         }
-        ed.say("That is not a multiline text object.");
+        ed.say(key!("That is not a multiline text object."));
     }
 }
 

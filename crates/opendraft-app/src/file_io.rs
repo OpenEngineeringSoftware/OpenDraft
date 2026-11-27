@@ -15,6 +15,8 @@ use opendraft_core::plot::PlotSpace;
 use crate::files::{display_name, same_file};
 use crate::io::Done;
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// How long file work runs before Cancel appears.
 const STALLED_AFTER: Duration = Duration::from_secs(1);
@@ -66,7 +68,7 @@ impl AppState {
         }
         self.exit_ok = false;
         self.file_ops.cancel_running();
-        self.tell("Cancelled. Nothing was changed on disk.".to_owned());
+        self.tell(key!("Cancelled. Nothing was changed on disk.").to_owned());
     }
 
     /// Apply everything the worker has finished. Called every frame.
@@ -151,7 +153,10 @@ impl AppState {
             return None;
         }
         self.opening.push(path.to_owned());
-        self.message = format!("Opening {}...", display_name(path));
+        self.set_message(Wording::new(
+            key!("Opening %{name}..."),
+            &[("name", &display_name(path))],
+        ));
         let path = path.to_owned();
         let previews = self.previews.clone();
         Some(self.submit_cancellable(move |cancelled| {
@@ -177,7 +182,13 @@ impl AppState {
             Ok(loaded) => loaded,
             Err(error) => {
                 self.locate.retain(|(p, _)| p != path);
-                self.tell(format!("Could not open {}: {error}", path.display()));
+                self.tell(Wording::new(
+                    key!("Could not open %{name}: %{error}"),
+                    &[
+                        ("name", &path.display().to_string()),
+                        ("error", &error.to_string()),
+                    ],
+                ));
                 return;
             }
         };
@@ -205,19 +216,17 @@ impl AppState {
             let doc = self.install_document(title, session);
             doc.view.request_zoom_extents();
             self.commit_recent(path);
-            let left_out = if loaded.warnings.is_empty() {
-                ""
+            let text = if loaded.warnings.is_empty() {
+                key!("Imported %{file}: %{objects}")
             } else {
-                " (see the command line for what was left out)"
+                key!("Imported %{file}: %{objects} (see the command line for what was left out)")
             };
             let file = path.file_name().map_or_else(
                 || path.display().to_string(),
                 |n| n.to_string_lossy().into_owned(),
             );
-            self.tell(format!(
-                "Imported {file}: {}{left_out}",
-                crate::text::plural(objects, "object")
-            ));
+            let said = Wording::new(text, &[("file", &file)]);
+            self.tell(said.part("objects", crate::text::objects(objects)));
             return;
         }
         let session = Session::with_document(loaded.document);
@@ -225,7 +234,7 @@ impl AppState {
         doc.path = Some(path.to_owned());
         doc.view.request_zoom_extents();
         self.commit_recent(path);
-        self.message = format!("Opened {title}");
+        self.set_message(Wording::new(key!("Opened %{name}"), &[("name", &title)]));
     }
 
     // ---- save ----
@@ -240,7 +249,11 @@ impl AppState {
     pub(crate) fn begin_save_job(&mut self, index: usize, path: &Path) -> Option<u64> {
         let doc = &self.docs[index];
         if self.saving.contains(&doc.uid) {
-            self.message = format!("{} is already being saved", doc.title);
+            let said = Wording::new(
+                key!("%{name} is already being saved"),
+                &[("name", &doc.title)],
+            );
+            self.set_message(said);
             return None;
         }
         // What is written shows the fields as they are now.
@@ -249,7 +262,10 @@ impl AppState {
         let (uid, position) = (doc.uid, doc.drawing().history().position());
         let copy = doc.drawing().document().clone();
         self.saving.push(uid);
-        self.message = format!("Saving {}...", display_name(path));
+        self.set_message(Wording::new(
+            key!("Saving %{name}..."),
+            &[("name", &display_name(path))],
+        ));
         let path = path.to_owned();
         let previews = self.previews.clone();
         Some(self.submit_cancellable(move |cancelled| {
@@ -277,7 +293,13 @@ impl AppState {
         self.saving.retain(|&u| u != uid);
         let asked = self.confirm.as_ref().and_then(|c| c.saving()) == Some(uid);
         if let Err(error) = result {
-            self.tell(format!("Could not save {}: {error}", path.display()));
+            self.tell(Wording::new(
+                key!("Could not save %{name}: %{error}"),
+                &[
+                    ("name", &path.display().to_string()),
+                    ("error", &error.to_string()),
+                ],
+            ));
             if asked {
                 // Stay on the question so the user can try again or give up.
                 if let Some(confirm) = self.confirm.as_mut() {
@@ -299,7 +321,7 @@ impl AppState {
             }
         }
         self.recent.add(path);
-        self.tell(format!("Saved {title}"));
+        self.tell(Wording::new(key!("Saved %{name}"), &[("name", &title)]));
         if asked {
             self.next_pending();
         }
@@ -314,7 +336,10 @@ impl AppState {
     /// Export drawing `index`; returns the worker's job id.
     pub(crate) fn begin_export_of(&mut self, index: usize, path: &Path) -> u64 {
         let copy = self.docs[index].drawing().document().clone();
-        self.message = format!("Exporting {}...", display_name(path));
+        self.set_message(Wording::new(
+            key!("Exporting %{name}..."),
+            &[("name", &display_name(path))],
+        ));
         let path = path.to_owned();
         self.submit_cancellable(move |cancelled| Done::Exported {
             result: opendraft_files::save_cancellable(&path, &copy, cancelled),
@@ -349,7 +374,10 @@ impl AppState {
         let copy = draft
             .and_then(|d| crate::plot_job::document_with_draft(document, d).ok())
             .unwrap_or_else(|| document.clone());
-        self.message = format!("Plotting {}...", display_name(path));
+        self.set_message(Wording::new(
+            key!("Plotting %{name}..."),
+            &[("name", &display_name(path))],
+        ));
         let path = path.to_owned();
         self.submit_cancellable(move |cancelled| Done::Exported {
             result: opendraft_files::plot_cancellable(&path, &copy, space, cancelled),
@@ -365,12 +393,21 @@ impl AppState {
     ) {
         match result {
             Ok(notes) => {
-                self.tell(format!("Exported {}", path.display()));
+                self.tell(Wording::new(
+                    key!("Exported %{name}"),
+                    &[("name", &path.display().to_string())],
+                ));
                 for note in notes {
                     self.cmdline.say(note);
                 }
             }
-            Err(error) => self.tell(format!("Could not export {}: {error}", path.display())),
+            Err(error) => self.tell(Wording::new(
+                key!("Could not export %{name}: %{error}"),
+                &[
+                    ("name", &path.display().to_string()),
+                    ("error", &error.to_string()),
+                ],
+            )),
         }
     }
 }

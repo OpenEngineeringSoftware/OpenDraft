@@ -37,8 +37,8 @@ pub(crate) fn pick_attributed_insert(
         };
         match has_attributes(ed, picked.id)? {
             Some(true) => return Ok(picked.id),
-            Some(false) => ed.say("That block reference has no attributes."),
-            None => ed.say("That is not a block reference."),
+            Some(false) => ed.say(key!("That block reference has no attributes.")),
+            None => ed.say(key!("That is not a block reference.")),
         }
     }
 }

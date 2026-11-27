@@ -44,7 +44,9 @@ pub fn draw_mleader(ed: &mut Editor) -> Result<(), Cancelled> {
             .unwrap_or_else(MLeaderStyle::standard)
     })?;
     if style.leader_type == MLeaderLineType::Spline {
-        ed.say("Spline leaders are not supported yet; make a style with straight leaders current.");
+        ed.say(key!(
+            "Spline leaders are not supported yet; make a style with straight leaders current."
+        ));
         return Ok(());
     }
     // The text is level with the coordinate system's X axis.
@@ -67,7 +69,7 @@ pub fn draw_mleader(ed: &mut Editor) -> Result<(), Cancelled> {
             .ghost(move |at| ghost(&shown, &so_far, at, level));
         match ed.ask_point(options)? {
             Answer::Value(at) if same(at, points[points.len() - 1]) => {
-                ed.say("That point is where the last one is.");
+                ed.say(key!("That point is where the last one is."));
             }
             Answer::Value(at) => {
                 points.push(at);

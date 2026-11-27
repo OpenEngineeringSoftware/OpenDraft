@@ -8,7 +8,7 @@ use opendraft_core::purge::{blocked, purgeable, unnamed, Blocked, Category, Item
 use opendraft_core::{BlockId, Document};
 
 use crate::purge_delete::delete_actions;
-use crate::text::plural;
+use opendraft_commands::Wording;
 use opendraft_ui::key;
 
 /// Which page of the dialog shows.
@@ -88,19 +88,23 @@ pub fn block_picture(doc: &Document, id: BlockId) -> Option<opendraft_canvas::pr
 /// What was deleted, one line for each, then the total.
 fn report(ed: &Editor, gone: &[Purgeable]) {
     for p in gone {
-        let what = match p.item.category() {
-            Category::Blocks => format!("block \"{}\"", p.name),
-            Category::DimStyles => format!("dimension style \"{}\"", p.name),
-            Category::Layers => format!("layer \"{}\"", p.name),
-            Category::Linetypes => format!("linetype \"{}\"", p.name),
-            Category::MLeaderStyles => format!("multileader style \"{}\"", p.name),
-            Category::TextStyles => format!("text style \"{}\"", p.name),
-            Category::ZeroLength => format!("{} of zero-length geometry", p.name),
-            Category::EmptyText => format!("{} of empty text", p.name),
+        let text = match p.item.category() {
+            Category::Blocks => key!("Deleting block \"%{name}\"."),
+            Category::DimStyles => key!("Deleting dimension style \"%{name}\"."),
+            Category::Layers => key!("Deleting layer \"%{name}\"."),
+            Category::Linetypes => key!("Deleting linetype \"%{name}\"."),
+            Category::MLeaderStyles => key!("Deleting multileader style \"%{name}\"."),
+            Category::TextStyles => key!("Deleting text style \"%{name}\"."),
+            Category::ZeroLength => key!("Deleting %{name} of zero-length geometry."),
+            Category::EmptyText => key!("Deleting %{name} of empty text."),
         };
-        ed.say(format!("Deleting {what}."));
+        ed.say(Wording::new(text, &[("name", &p.name)]));
     }
-    ed.say(format!("{} purged.", plural(gone.len(), "item")));
+    ed.say(Wording::count(
+        gone.len(),
+        key!("%{count} item purged."),
+        key!("%{count} items purged."),
+    ));
 }
 
 /// What a purge may do: which named items (all when `None`), whether to
@@ -174,8 +178,9 @@ fn first_round(doc: &Document, purge: &Purge) -> Vec<Purgeable> {
 pub fn purge_run(ed: &mut Editor, purge: Purge) -> Result<(), Cancelled> {
     let mut sim = ed.read(|doc| doc.clone())?;
     if let Err(why) = sim.validate() {
-        ed.say(format!(
-            "PURGE refused: the drawing has an error ({why:?})."
+        ed.say(Wording::new(
+            key!("PURGE refused: the drawing has an error (%{why})."),
+            &[("why", &format!("{why:?}"))],
         ));
         return Ok(());
     }
@@ -207,7 +212,7 @@ pub fn purge_run(ed: &mut Editor, purge: Purge) -> Result<(), Cancelled> {
         seen.extend(found.iter().map(|p| p.item.clone()));
     }
     if rounds.is_empty() {
-        ed.say("Nothing to purge.");
+        ed.say(key!("Nothing to purge."));
         return Ok(());
     }
     let replay = rounds.clone();

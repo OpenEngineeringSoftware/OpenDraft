@@ -4,6 +4,7 @@
 //! until Enter, with Undo taking back the last one. (AutoCAD's LAYLCK takes
 //! one object only; here it goes on like the other two.)
 
+use opendraft_commands::Wording;
 use opendraft_commands::{Answer, Cancelled, Editor, ModifyLayers, Options, Picked};
 use opendraft_core::{EntityId, Layer, LayerId};
 use opendraft_ui::key;
@@ -57,19 +58,29 @@ impl Switch {
     }
 
     /// "turned off", "frozen", "locked".
-    fn past(self) -> &'static str {
+    /// "Layer "%{name}" is already off.", to say nothing changed.
+    fn already(self) -> &'static str {
         match self {
-            Switch::Off => "turned off",
-            Switch::Freeze => "frozen",
-            Switch::Lock => "locked",
+            Switch::Off => key!("Layer \"%{name}\" is already turned off."),
+            Switch::Freeze => key!("Layer \"%{name}\" is already frozen."),
+            Switch::Lock => key!("Layer \"%{name}\" is already locked."),
+        }
+    }
+
+    /// "Layer "%{name}" has been turned off.", to say it changed.
+    fn done_text(self) -> &'static str {
+        match self {
+            Switch::Off => key!("Layer \"%{name}\" has been turned off."),
+            Switch::Freeze => key!("Layer \"%{name}\" has been frozen."),
+            Switch::Lock => key!("Layer \"%{name}\" has been locked."),
         }
     }
 
     fn undone(self) -> &'static str {
         match self {
-            Switch::Off => "Layer turned on again.",
-            Switch::Freeze => "Layer thawed again.",
-            Switch::Lock => "Layer unlocked again.",
+            Switch::Off => key!("Layer turned on again."),
+            Switch::Freeze => key!("Layer thawed again."),
+            Switch::Lock => key!("Layer unlocked again."),
         }
     }
 }
@@ -119,7 +130,7 @@ fn switch_layers(ed: &mut Editor, switch: Switch) -> Result<(), Cancelled> {
                 changed -= 1;
                 ed.say(switch.undone());
             }
-            Answer::Keyword(_) => ed.say("Nothing to undo."),
+            Answer::Keyword(_) => ed.say(key!("Nothing to undo.")),
             Answer::Enter => return Ok(()),
         }
     }
@@ -146,13 +157,14 @@ fn layers_of(ed: &Editor, ids: Vec<EntityId>) -> Result<Vec<Layer>, Cancelled> {
 fn switch_one(ed: &Editor, switch: Switch, layer: Layer) -> Result<bool, Cancelled> {
     let name = layer.name.clone();
     if switch.done(&layer) {
-        ed.say(format!("Layer \"{name}\" is already {}.", switch.past()));
+        ed.say(Wording::new(switch.already(), &[("name", &name)]));
         return Ok(false);
     }
     let current = ed.read(|doc| doc.current_layer())? == layer.id;
     if current && switch == Switch::Freeze {
-        ed.say(format!(
-            "Cannot freeze layer \"{name}\". It is the current layer."
+        ed.say(Wording::new(
+            key!("Cannot freeze layer \"%{name}\". It is the current layer."),
+            &[("name", &name)],
         ));
         return Ok(false);
     }
@@ -173,7 +185,7 @@ fn switch_one(ed: &Editor, switch: Switch, layer: Layer) -> Result<bool, Cancell
         tx.perform(ModifyLayers::new(switch.step(), vec![changed]));
         Ok(())
     })?;
-    ed.say(format!("Layer \"{name}\" has been {}.", switch.past()));
+    ed.say(Wording::new(switch.done_text(), &[("name", &name)]));
     Ok(true)
 }
 

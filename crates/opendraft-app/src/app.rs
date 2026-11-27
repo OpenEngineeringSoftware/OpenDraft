@@ -210,7 +210,7 @@ impl OpenDraftApp {
             }
             Err(ExecuteError::Disabled(_)) => {}
             Err(ExecuteError::Unknown(id)) => {
-                self.state.message = format!("Not implemented yet: {id}");
+                self.state.say_not_built(&id);
             }
         }
     }
@@ -311,7 +311,7 @@ impl OpenDraftApp {
         } else if closing {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
             if self.state.exit_ok && self.state.io_busy() {
-                self.state.message = "Closing when the files are written...".into();
+                self.state.say_closing_later();
             }
         }
     }

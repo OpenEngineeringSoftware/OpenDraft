@@ -68,7 +68,7 @@ pub(crate) fn place(
         match ed.ask_point(options)? {
             Answer::Value(at) => {
                 let Some(dimension) = make(at, &tweaks) else {
-                    ed.say("Those points make no dimension.");
+                    ed.say(key!("Those points make no dimension."));
                     continue;
                 };
                 return add(ed, Entity::Dimension(Box::new(dimension)), "Dimension");
@@ -143,7 +143,7 @@ fn linear(ed: &mut Editor, aligned: bool) -> Result<(), Cancelled> {
             };
             match object_ends(&entity, picked.at) {
                 Some(ends) => break ends,
-                None => ed.say("Select a line, an arc or a straight segment."),
+                None => ed.say(key!("Select a line, an arc or a straight segment.")),
             }
         },
         Answer::Keyword(_) => return Err(Cancelled),
@@ -159,7 +159,7 @@ fn place_linear(
     aligned: bool,
 ) -> Result<(), Cancelled> {
     if distance(p1, p2) < MIN_SIZE {
-        ed.say("The extension line origins are the same point.");
+        ed.say(key!("The extension line origins are the same point."));
         return Ok(());
     }
     // Which way the cursor is, measured along the coordinate system's axes.
@@ -217,7 +217,7 @@ fn radial(ed: &mut Editor, diameter: bool) -> Result<(), Cancelled> {
             Entity::Circle { center, radius } | Entity::Arc { center, radius, .. } => {
                 break (center, radius.abs());
             }
-            _ => ed.say("Select an arc or a circle."),
+            _ => ed.say(key!("Select an arc or a circle.")),
         }
     };
     place_radial(ed, style, (center, radius), diameter)
@@ -292,7 +292,9 @@ pub fn dim_auto(ed: &mut Editor) -> Result<(), Cancelled> {
             }
             _ => match object_ends(&entity, picked.at) {
                 Some(ends) => return place_linear(ed, style, ends, false),
-                None => ed.say("Select a line, a circle, an arc or a straight segment."),
+                None => ed.say(key!(
+                    "Select a line, a circle, an arc or a straight segment."
+                )),
             },
         }
     }
@@ -330,7 +332,7 @@ pub fn dim_arc(ed: &mut Editor) -> Result<(), Cancelled> {
                 let at = |angle: f64| opendraft_core::arc::point_at(center, radius, angle);
                 break (center, at(start), at(end));
             }
-            _ => ed.say("Select an arc."),
+            _ => ed.say(key!("Select an arc.")),
         }
     };
     let make: Make = Arc::new(move |at, tweaks| {

@@ -3,9 +3,11 @@
 
 use std::sync::Arc;
 
+use crate::message_language::because;
 use crate::plot_job::document_with_draft;
 use crate::plot_line::{plot_prompt, Destination, PlotRequest, Setup};
 use crate::state::AppState;
+use opendraft_ui::key;
 
 impl AppState {
     /// Start -PLOT on the drawing being worked in.
@@ -45,12 +47,12 @@ impl AppState {
         } = request;
         if save_changes {
             if let Err(why) = self.set_page_setup(&draft) {
-                self.tell(format!("The page setup was not saved: {why}"));
+                self.tell(because(key!("The page setup was not saved: %{why}"), why));
                 return;
             }
         }
         if let Err(why) = document_with_draft(self.session().document(), &draft) {
-            self.tell(format!("Nothing was plotted: {why}"));
+            self.tell(because(key!("Nothing was plotted: %{why}"), why));
             return;
         }
         self.settings.plot_device = draft.plot.device_name.clone();

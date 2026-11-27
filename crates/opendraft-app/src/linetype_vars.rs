@@ -4,6 +4,8 @@
 use opendraft_commands::{SetLinetypes, SysVar, Value};
 
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 impl AppState {
     /// The active drawing's `LTSCALE`.
@@ -19,7 +21,10 @@ impl AppState {
         }
         let table = self.session().document().linetypes().clone();
         self.set_linetypes(table, scale);
-        self.message = format!("Linetype scale {scale}");
+        self.set_message(Wording::new(
+            key!("Linetype scale %{scale}"),
+            &[("scale", &scale.to_string())],
+        ));
     }
 
     /// Replace the linetype table and `LTSCALE` as one undo step (the
@@ -30,7 +35,7 @@ impl AppState {
             return;
         }
         self.perform(SetLinetypes::new(table, scale));
-        self.message = "Linetypes changed".to_owned();
+        self.message = key!("Linetypes changed").to_owned();
     }
 }
 

@@ -15,6 +15,8 @@ use crate::layouts::PageDraft;
 use crate::plot_state::PlotFormat;
 use crate::print_backend::{PrintError, PrintJob, Printer, PrinterId};
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// How long the settings stay still before the preview is drawn again.
 pub const PREVIEW_DELAY: Duration = Duration::from_millis(250);
@@ -174,7 +176,7 @@ pub fn document_with_draft(document: &Document, draft: &PageDraft) -> Result<Doc
             let layout = layouts
                 .iter_mut()
                 .find(|l| l.id == id)
-                .ok_or("The layout is gone.")?;
+                .ok_or(key!("The layout is gone."))?;
             layout.width = draft.width;
             layout.height = draft.height;
             layout.plot = plot;
@@ -192,7 +194,7 @@ pub fn render_preview(document: &Document, draft: &PageDraft) -> Result<PlotPrev
     let sheet = plot_page(&copy, draft.space).map_err(|e| e.to_string())?;
     let (width, height) = opendraft_files::png_size(&sheet, PREVIEW_WIDTH);
     if height > PREVIEW_MAX_HEIGHT {
-        return Err("The sheet is too tall to preview.".to_owned());
+        return Err(key!("The sheet is too tall to preview.").to_owned());
     }
     let bytes = opendraft_files::png(&sheet, width, height).map_err(|e| e.to_string())?;
     let mut reader = png::Decoder::new(Cursor::new(bytes))
@@ -202,7 +204,7 @@ pub fn render_preview(document: &Document, draft: &PageDraft) -> Result<PlotPrev
         0;
         reader
             .output_buffer_size()
-            .ok_or("The preview is too large.")?
+            .ok_or(key!("The preview is too large."))?
     ];
     let info = reader.next_frame(&mut rgba).map_err(|e| e.to_string())?;
     rgba.truncate(info.buffer_size());
@@ -224,7 +226,7 @@ impl AppState {
             .layout()
             .map_or(PlotSpace::Model, PlotSpace::Layout);
         let Some(mut draft) = PageDraft::of(self.session().document(), space) else {
-            self.message = "That layout is gone".to_owned();
+            self.message = key!("That layout is gone").to_owned();
             return false;
         };
         // A Model tab saved with an area it cannot plot (AutoCAD's own is
@@ -366,14 +368,19 @@ impl AppState {
     ) {
         match result {
             Ok(receipt) => {
-                let queue = receipt
-                    .queue_id
-                    .map(|id| format!(" (job {id})"))
-                    .unwrap_or_default();
-                self.tell(format!("Sent to {printer}{queue}"));
+                self.tell(match receipt.queue_id {
+                    Some(id) => Wording::new(
+                        key!("Sent to %{printer} (job %{job})"),
+                        &[("printer", printer), ("job", &id.to_string())],
+                    ),
+                    None => Wording::new(key!("Sent to %{printer}"), &[("printer", printer)]),
+                });
             }
-            Err(PrintError::Cancelled) => self.tell("Printing was cancelled".to_owned()),
-            Err(why) => self.tell(format!("Could not print to {printer}: {why}")),
+            Err(PrintError::Cancelled) => self.tell(key!("Printing was cancelled").to_owned()),
+            Err(why) => self.tell(Wording::new(
+                key!("Could not print to %{printer}: %{why}"),
+                &[("printer", printer), ("why", &why.to_string())],
+            )),
         }
     }
 
@@ -394,7 +401,10 @@ impl AppState {
         let space = draft.space;
         let backend = self.command_dialogs.print.0.clone();
         let name = printer.0.clone();
-        self.message = format!("Printing to {name}...");
+        self.set_message(Wording::new(
+            key!("Printing to %{name}..."),
+            &[("name", &name)],
+        ));
         self.submit_cancellable(move |cancel| {
             let result = plot_sheet(&copy, space)
                 .map_err(|e| PrintError::Plot(e.to_string()))

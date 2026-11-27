@@ -8,6 +8,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crate::cmdline::CommandLine;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// `OPENDRAFT_ICONS` when it is set; else an `icons` folder beside the program (an
 /// archive's copy); else, in a debug build, the source tree's `assets/icons`,
@@ -41,8 +43,9 @@ fn source_tree() -> Option<PathBuf> {
 pub fn load(cmdline: &mut CommandLine) {
     let loaded = opendraft_ui::icon_set::load(folder().as_deref());
     for (file, why) in &loaded.failed {
-        cmdline.say(format!(
-            "Icon {file} could not be used ({why}); the built-in drawing is used instead."
+        cmdline.say(Wording::new(
+            key!("Icon %{file} could not be used (%{why}); the built-in drawing is used instead."),
+            &[("file", &file.to_string()), ("why", &why.to_string())],
         ));
     }
 }

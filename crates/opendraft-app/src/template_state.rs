@@ -8,6 +8,8 @@ use opendraft_core::Document;
 use crate::io::Done;
 use crate::state::AppState;
 use crate::templates::{Source, Template};
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 impl AppState {
     /// A new drawing from `template`: a starter at once, a file after it has
@@ -18,7 +20,10 @@ impl AppState {
             Source::File(path) => {
                 let path = path.clone();
                 let name = template.name.clone();
-                self.message = format!("Opening template {name}...");
+                self.set_message(Wording::new(
+                    key!("Opening template %{name}..."),
+                    &[("name", &name)],
+                ));
                 self.submit(move || Done::FromTemplate {
                     name,
                     result: Box::new(opendraft_files::load(&path)),
@@ -40,7 +45,10 @@ impl AppState {
                 }
                 self.start_from(loaded.document);
             }
-            Err(error) => self.tell(format!("Could not use template {name}: {error}")),
+            Err(error) => self.tell(Wording::new(
+                key!("Could not use template %{name}: %{error}"),
+                &[("name", name), ("error", &error.to_string())],
+            )),
         }
     }
 

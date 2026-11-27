@@ -24,7 +24,8 @@ use opendraft_ui::key;
 
 use crate::defaults::EditorDefaults;
 use crate::hatch_memory::{FillChoice, Memory};
-use crate::text::plural;
+use crate::message_language::because;
+use opendraft_commands::Wording;
 
 /// Ends closer than this count as meeting, as for JOIN.
 const GAP: f64 = 1e-6;
@@ -32,26 +33,26 @@ const GAP: f64 = 1e-6;
 const SELECT: &str = key!("Select objects");
 
 /// What the current settings are, as a line for the command line.
-pub(crate) fn summary(m: &Memory) -> String {
-    let style = m.style.label();
-    let style = format!(
-        "{style}   Associative={}",
-        if m.associative { "Yes" } else { "No" }
-    );
-    match &m.fill {
-        FillChoice::Solid => format!("Current hatch: SOLID   Island style={style}"),
-        FillChoice::UserDefined => format!(
-            "Current hatch: User defined   Spacing={}   Angle={}   Double={}   Island style={style}",
-            m.spacing,
-            m.angle.to_degrees(),
-            if m.double { "Yes" } else { "No" },
+pub(crate) fn summary(m: &Memory) -> Wording {
+    let yes = |on: bool| Wording::plain(if on { key!("Yes") } else { key!("No") });
+    let angle = m.angle.to_degrees().to_string();
+    let said = match &m.fill {
+        FillChoice::Solid => Wording::new(
+            key!("Current hatch: SOLID   Island style=%{style}   Associative=%{associative}"),
+            &[],
         ),
-        FillChoice::Named(name) => format!(
-            "Current hatch: {name}   Scale={}   Angle={}   Island style={style}",
-            m.scale,
-            m.angle.to_degrees()
+        FillChoice::UserDefined => Wording::new(
+            key!("Current hatch: User defined   Spacing=%{spacing}   Angle=%{angle}   Double=%{double}   Island style=%{style}   Associative=%{associative}"),
+            &[("spacing", &m.spacing.to_string()), ("angle", &angle)],
+        )
+        .part("double", yes(m.double)),
+        FillChoice::Named(name) => Wording::new(
+            key!("Current hatch: %{name}   Scale=%{scale}   Angle=%{angle}   Island style=%{style}   Associative=%{associative}"),
+            &[("name", name), ("scale", &m.scale.to_string()), ("angle", &angle)],
         ),
-    }
+    };
+    said.part("style", Wording::plain(m.style.label()))
+        .part("associative", yes(m.associative))
 }
 
 /// The options that apply to the current fill.
@@ -90,7 +91,10 @@ fn ask_pattern(ed: &Editor) -> Result<(), Cancelled> {
         let text = typed.trim();
         if text == "?" {
             let names: Vec<&str> = builtin().names().collect();
-            ed.say(format!("Patterns: SOLID, USER, {}", names.join(", ")));
+            ed.say(Wording::new(
+                key!("Patterns: SOLID, USER, %{names}"),
+                &[("names", &names.join(", "))],
+            ));
             continue;
         }
         let name = if text.eq_ignore_ascii_case("u") {
@@ -103,7 +107,10 @@ fn ask_pattern(ed: &Editor) -> Result<(), Cancelled> {
                 ed.defaults().hatch.change(|m| m.fill = choice);
                 return Ok(());
             }
-            None => ed.say(format!("Pattern \"{text}\" not found. Enter ? to list.")),
+            None => ed.say(Wording::new(
+                key!("Pattern \"%{name}\" not found. Enter ? to list."),
+                &[("name", text)],
+            )),
         }
     }
 }
@@ -114,7 +121,7 @@ fn positive(ed: &Editor, message: &str, current: f64) -> Result<f64, Cancelled> 
         if value.is_finite() && value > 0.0 {
             return Ok(value);
         }
-        ed.say("Requires a positive number.");
+        ed.say(key!("Requires a positive number."));
     }
 }
 
@@ -249,10 +256,10 @@ fn from_objects(ed: &Editor, ids: Vec<EntityId>) -> Result<Option<Found>, Cancel
                 })
                 .collect();
             if ignored > 0 {
-                ed.say(format!(
-                    "{} cannot be hatched and {} left out.",
-                    plural(ignored, "object"),
-                    if ignored == 1 { "was" } else { "were" }
+                ed.say(Wording::count(
+                    ignored,
+                    key!("%{count} object cannot be hatched and was left out."),
+                    key!("%{count} objects cannot be hatched and were left out."),
                 ));
             }
             Ok(Some(Found {
@@ -262,7 +269,7 @@ fn from_objects(ed: &Editor, ids: Vec<EntityId>) -> Result<Option<Found>, Cancel
             }))
         }
         Err(why) => {
-            ed.say(format!("Unable to hatch: {why}."));
+            ed.say(because(key!("Unable to hatch: %{why}."), why));
             Ok(None)
         }
     }
@@ -296,7 +303,7 @@ fn from_point(ed: &Editor, at: Point) -> Result<Option<Found>, Cancelled> {
             seed: Some(at),
         })),
         Err(why) => {
-            ed.say(format!("{why}."));
+            ed.say(because("%{why}.", why));
             Ok(None)
         }
     }
@@ -332,7 +339,7 @@ pub fn hatch_objects(ed: &mut Editor) -> Result<(), Cancelled> {
         let mut hatch = match ed.defaults().hatch.get().hatch(current.loops.clone(), ccs) {
             Ok(h) => h,
             Err(why) => {
-                ed.say(format!("Unable to hatch: {why}"));
+                ed.say(because(key!("Unable to hatch: %{why}"), why));
                 adjust(ed, "Pattern")?;
                 continue;
             }
@@ -346,7 +353,7 @@ pub fn hatch_objects(ed: &mut Editor) -> Result<(), Cancelled> {
             .evaluate(check_tolerance(&hatch), &HatchLimits::default())
             .err();
         if let Some(why) = &problem {
-            ed.say(format!("The hatch cannot be drawn: {why}."));
+            ed.say(because(key!("The hatch cannot be drawn: %{why}."), why));
         }
         ed.say(summary(&ed.defaults().hatch.get()));
         let shown = hatch.clone();
@@ -365,7 +372,7 @@ pub fn hatch_objects(ed: &mut Editor) -> Result<(), Cancelled> {
             Answer::Keyword(k) if k == SELECT => found = None,
             Answer::Keyword(k) => adjust(ed, &k)?,
             Answer::Value(_) | Answer::Enter if problem.is_some() => {
-                ed.say("Change the scale or spacing first.");
+                ed.say(key!("Change the scale or spacing first."));
             }
             Answer::Value(_) | Answer::Enter => {
                 let sources = current.sources.clone();
@@ -383,7 +390,7 @@ pub fn hatch_objects(ed: &mut Editor) -> Result<(), Cancelled> {
                     }
                     Ok(())
                 })?;
-                ed.say("Hatch made.");
+                ed.say(key!("Hatch made."));
                 return Ok(());
             }
         }

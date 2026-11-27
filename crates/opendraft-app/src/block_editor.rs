@@ -21,6 +21,8 @@ use opendraft_core::{BlockId, Entity, EntityId};
 
 use crate::insert_cmd::choose_block;
 use crate::state::{AppState, Doc};
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// A block being edited, and the drawing set aside meanwhile.
 pub struct BlockEdit {
@@ -105,7 +107,7 @@ impl AppState {
     /// BEDIT: edit the block of the selected reference, or ask which block.
     pub fn bedit(&mut self) {
         if self.in_block_editor() {
-            self.message = "The Block Editor is already open.".to_owned();
+            self.message = key!("The Block Editor is already open.").to_owned();
             return;
         }
         let doc = &self.docs[self.active];
@@ -138,7 +140,7 @@ impl AppState {
         let document = &doc.session.document();
         let (Some(editor), Some(block)) = (document.block_editor_document(id), document.block(id))
         else {
-            self.message = "That block is not in this drawing.".to_owned();
+            self.message = key!("That block is not in this drawing.").to_owned();
             return;
         };
         let name = block.name.clone();
@@ -155,8 +157,9 @@ impl AppState {
             selection,
             closing: false,
         }));
-        self.tell(format!(
-            "Editing block \"{name}\". The origin is its base point. BSAVE saves it, BCLOSE closes the Block Editor."
+        self.tell(Wording::new(
+            key!("Editing block \"%{name}\". The origin is its base point. BSAVE saves it, BCLOSE closes the Block Editor."),
+            &[("name", &name)],
         ));
     }
 
@@ -179,16 +182,18 @@ impl AppState {
                 return false;
             }
         };
-        let mut notes = save.notes.clone();
+        let mut notes: Vec<Wording> = save.notes.iter().map(Wording::from).collect();
         for action in &save.removed_actions {
-            notes.push(format!(
-                "Action \"{action}\" was removed: none of its objects is left."
+            notes.push(Wording::new(
+                key!("Action \"%{action}\" was removed: none of its objects is left."),
+                &[("action", &action.to_string())],
             ));
         }
         if save.states_changed > 0 {
-            notes.push(format!(
-                "{} adjusted to the new parameters and value sets.",
-                crate::text::plural(save.states_changed, "reference")
+            notes.push(Wording::count(
+                save.states_changed,
+                key!("%{count} reference adjusted to the new parameters and value sets."),
+                key!("%{count} references adjusted to the new parameters and value sets."),
             ));
         }
         let step = format!("Save block {}", edit.name);
@@ -210,7 +215,10 @@ impl AppState {
         }
         doc.session.mark_saved();
         let name = edit.name.clone();
-        self.tell(format!("Block \"{name}\" saved."));
+        self.tell(Wording::new(
+            key!("Block \"%{name}\" saved."),
+            &[("name", &name)],
+        ));
         for note in notes {
             self.tell(note);
         }
@@ -261,7 +269,10 @@ impl AppState {
         }
         self.abort_command();
         if let Some(name) = self.docs[self.active].end_block_edit() {
-            self.message = format!("Closed the Block Editor for \"{name}\".");
+            self.set_message(Wording::new(
+                key!("Closed the Block Editor for \"%{name}\"."),
+                &[("name", &name)],
+            ));
         }
     }
 
@@ -284,8 +295,9 @@ impl AppState {
         }
         self.active = index;
         self.ask_to_save_block(index);
-        self.tell(format!(
-            "Block \"{name}\" has unsaved changes: save or discard them, then close again."
+        self.tell(Wording::new(
+            key!("Block \"%{name}\" has unsaved changes: save or discard them, then close again."),
+            &[("name", &name)],
         ));
         false
     }

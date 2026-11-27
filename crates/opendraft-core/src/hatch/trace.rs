@@ -36,8 +36,8 @@ pub enum TraceError {
 impl std::fmt::Display for TraceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NoBoundary => write!(f, "valid hatch boundary not found"),
-            Self::TooLarge => write!(f, "too much geometry to find a boundary in"),
+            Self::NoBoundary => f.write_str(key!("valid hatch boundary not found")),
+            Self::TooLarge => f.write_str(key!("too much geometry to find a boundary in")),
         }
     }
 }

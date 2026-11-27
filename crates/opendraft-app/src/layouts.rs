@@ -15,6 +15,12 @@ use opendraft_core::{
 };
 
 use crate::state::{AppState, Doc};
+use opendraft_ui::key;
+
+const NO_VIEWPORT: &str = key!("This layout has no viewport to enter; use MVIEW");
+const BAD_SETUP: &str = key!("The page setup contains an invalid margin, scale, window or DPI.");
+/// What VPLOCK says, by whether the viewport was locked before.
+const LOCK_SAID: [&str; 2] = [key!("Viewport locked"), key!("Viewport unlocked")];
 
 impl PageDraft {
     /// The working copy of the setup of `space`, or `None` if the layout is gone.
@@ -183,7 +189,7 @@ impl AppState {
     /// MSPACE: work in model space through a viewport (the one picked, else the top one).
     pub fn mspace(&mut self) {
         let Space::Paper(id) = self.space() else {
-            self.message = "MSPACE works from a layout's paper space".to_owned();
+            self.message = key!("MSPACE works from a layout's paper space").to_owned();
             return;
         };
         let picked = self.docs[self.active].view.selected_viewport();
@@ -198,14 +204,14 @@ impl AppState {
             .or_else(|| layout.and_then(Layout::default_viewport));
         match target {
             Some(v) => self.switch_space(Space::Viewport(id, v)),
-            None => self.message = "This layout has no viewport to enter; use MVIEW".to_owned(),
+            None => self.message = NO_VIEWPORT.to_owned(),
         }
     }
 
     pub fn pspace(&mut self) {
         match self.space() {
             Space::Viewport(l, _) => self.switch_space(Space::Paper(l)),
-            _ => self.message = "PSPACE works from inside a viewport".to_owned(),
+            _ => self.message = key!("PSPACE works from inside a viewport").to_owned(),
         }
     }
 
@@ -239,7 +245,7 @@ impl AppState {
         let document = &self.session().document();
         let name = draft.name.trim();
         if name.is_empty() {
-            return Err("A layout needs a name.".to_owned());
+            return Err(key!("A layout needs a name.").to_owned());
         }
         if document.layout_name_taken(name, Some(layout_id)) {
             return Err(format!("A layout called \"{name}\" already exists."));
@@ -254,13 +260,13 @@ impl AppState {
         plot.paper_width_mm = draft.width;
         plot.paper_height_mm = draft.height;
         if !plot.is_valid() {
-            return Err("The page setup contains an invalid margin, scale, window or DPI.".into());
+            return Err(BAD_SETUP.into());
         }
         let mut layouts = document.layouts().to_vec();
         let layout = layouts
             .iter_mut()
             .find(|l| l.id == layout_id)
-            .ok_or("The layout is gone.")?;
+            .ok_or(key!("The layout is gone."))?;
         if (
             layout.name.as_str(),
             layout.width,
@@ -279,7 +285,7 @@ impl AppState {
         if resized {
             self.docs[self.active].view.request_zoom_extents();
         }
-        self.message = "Page setup changed".to_owned();
+        self.message = key!("Page setup changed").to_owned();
         Ok(())
     }
 
@@ -296,13 +302,13 @@ impl AppState {
         plot.paper_height_mm = draft.height;
         plot.flags |= opendraft_core::plot_settings::flags::MODEL_TYPE;
         if !plot.is_valid() {
-            return Err("The page setup contains an invalid margin, scale, window or DPI.".into());
+            return Err(BAD_SETUP.into());
         }
         if self.session().document().model_plot() == &plot {
             return Ok(());
         }
         self.perform(SetModelPlot::new("Page setup", plot));
-        self.message = "Page setup changed".to_owned();
+        self.message = key!("Page setup changed").to_owned();
         Ok(())
     }
 
@@ -310,7 +316,7 @@ impl AppState {
     pub fn new_layout(&mut self) {
         if self.in_block_editor() {
             self.message =
-                "Layouts are not part of a block. Close the Block Editor first.".to_owned();
+                key!("Layouts are not part of a block. Close the Block Editor first.").to_owned();
             return;
         }
         let document = &self.session().document();
@@ -386,7 +392,7 @@ impl AppState {
     /// Freeze (`freeze`) or thaw layers in the target viewport, one undo step.
     pub fn set_layers_in_viewport(&mut self, layers: &[LayerId], freeze: bool) {
         let Some((layout, viewport)) = self.target_viewport() else {
-            self.message = "Pick a viewport, or enter one with MSPACE".to_owned();
+            self.message = key!("Pick a viewport, or enter one with MSPACE").to_owned();
             return;
         };
         let layouts = self.session().document().layouts();
@@ -405,7 +411,7 @@ impl AppState {
     /// Lock or unlock the target viewport (VPLOCK).
     pub fn toggle_viewport_lock(&mut self) {
         let Some((layout, viewport)) = self.target_viewport() else {
-            self.message = "Pick a viewport, or enter one with MSPACE".to_owned();
+            self.message = key!("Pick a viewport, or enter one with MSPACE").to_owned();
             return;
         };
         let locked = self.target_viewport_locked();
@@ -419,7 +425,7 @@ impl AppState {
                 },
                 layouts,
             ));
-            self.message = format!("Viewport {}", if locked { "unlocked" } else { "locked" });
+            self.message = LOCK_SAID[usize::from(locked)].to_owned();
         }
     }
 
@@ -437,7 +443,7 @@ impl AppState {
         }
         self.perform(SetLayouts::new("Erase viewport", layouts));
         self.docs[self.active].view.clear_selected_viewport();
-        self.message = "Erased 1 viewport".to_owned();
+        self.message = key!("Erased 1 viewport").to_owned();
         true
     }
 }

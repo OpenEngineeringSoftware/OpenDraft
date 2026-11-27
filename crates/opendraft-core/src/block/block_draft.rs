@@ -68,16 +68,16 @@ impl BlockDraft {
     pub fn problem(&self) -> Option<String> {
         let name = self.name.trim();
         if name.is_empty() {
-            return Some("Enter a name for the block.".to_owned());
+            return Some(key!("Enter a name for the block.").to_owned());
         }
         if let Some(why) = block_name_problem(name) {
             return Some(why.to_owned());
         }
         if !(self.base_on_screen || (self.x.is_finite() && self.y.is_finite())) {
-            return Some("The base point is not a number.".to_owned());
+            return Some(key!("The base point is not a number.").to_owned());
         }
         if !self.objects_on_screen && self.objects.is_empty() {
-            return Some("No objects selected.".to_owned());
+            return Some(key!("No objects selected.").to_owned());
         }
         None
     }

@@ -10,13 +10,14 @@ use opendraft_core::{BlockDef, BlockId, Document, Entity, EntityId, Insert, Poin
 use opendraft_ui::key;
 
 use crate::text::plural;
+use opendraft_commands::Wording;
 
 /// The block names with how often each is inserted, for the `?` option.
 pub(crate) fn list_blocks(doc: &Document) -> Vec<String> {
     if doc.blocks().is_empty() {
-        return vec!["No blocks are defined in this drawing.".to_owned()];
+        return vec![key!("No blocks are defined in this drawing.").to_owned()];
     }
-    let mut lines = vec!["Defined blocks:".to_owned()];
+    let mut lines = vec![key!("Defined blocks:").to_owned()];
     for block in doc.blocks() {
         let uses = doc.block_references(block.id).len();
         lines.push(format!(
@@ -92,7 +93,7 @@ pub fn define_block(ed: &mut Editor) -> Result<(), Cancelled> {
     let base = ed.get_point(key!("Specify insertion base point"))?;
     let chosen = ed.pickset_or_select(key!("Select objects"))?;
     if chosen.is_empty() {
-        ed.say("No objects selected; the block was not made.");
+        ed.say(key!("No objects selected; the block was not made."));
         return Ok(());
     }
     let made = Made {
@@ -136,8 +137,11 @@ pub(crate) fn make_block(ed: &Editor, made: Made) -> Result<Option<BlockId>, Can
     } = made;
     if let Some(id) = existing {
         if ed.read(move |doc| doc.block(id).is_some_and(|b| b.is_dynamic()))? {
-            ed.say(format!(
-                "Block \"{name}\" is a dynamic block: change it in the Block Editor (BEDIT)."
+            ed.say(Wording::new(
+                key!(
+                    "Block \"%{name}\" is a dynamic block: change it in the Block Editor (BEDIT)."
+                ),
+                &[("name", &name)],
             ));
             return Ok(None);
         }
@@ -164,9 +168,10 @@ pub(crate) fn make_block(ed: &Editor, made: Made) -> Result<Option<BlockId>, Can
             Err(why) => return Ok(Err(why.to_owned())),
         };
         let Some(record) = change.blocks.iter().find(|b| b.id == id).cloned() else {
-            return Ok(Err(
-                "The block could not be added to the block table.".to_owned()
-            ));
+            return Ok(Err(key!(
+                "The block could not be added to the block table."
+            )
+            .to_owned()));
         };
         tx.perform(SetBlocks::new("Block", change.blocks));
         if !change.objects.is_empty() {
@@ -184,11 +189,13 @@ pub(crate) fn make_block(ed: &Editor, made: Made) -> Result<Option<BlockId>, Can
     })?;
     Ok(match result {
         Ok((count, id)) => {
-            let done = if redefining { "redefined" } else { "defined" };
-            ed.say(format!(
-                "Block \"{label}\" {done} with {}.",
-                plural(count, "object")
-            ));
+            let text = if redefining {
+                key!("Block \"%{name}\" redefined with %{objects}.")
+            } else {
+                key!("Block \"%{name}\" defined with %{objects}.")
+            };
+            let said = Wording::new(text, &[("name", &label)]);
+            ed.say(said.part("objects", crate::text::objects(count)));
             Some(id)
         }
         Err(why) => {

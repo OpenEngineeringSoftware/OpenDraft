@@ -44,7 +44,10 @@ fn edit_one(ed: &mut Editor, id: EntityId) -> Result<bool, Cancelled> {
     let edited = match original.with_contents(contents, &style) {
         Ok(edited) => edited,
         Err(why) => {
-            ed.say(format!("The text was not changed: {why}."));
+            ed.say(crate::message_language::because(
+                key!("The text was not changed: %{why}."),
+                why,
+            ));
             return Ok(false);
         }
     };
@@ -101,10 +104,10 @@ pub fn edit_text(ed: &mut Editor) -> Result<(), Cancelled> {
                     return Ok(());
                 }
             }
-            Answer::Value(_) => ed.say("That is not a text object."),
+            Answer::Value(_) => ed.say(key!("That is not a text object.")),
             Answer::Keyword(word) if word == "Undo" => {
                 if edits == 0 {
-                    ed.say("Nothing to undo.");
+                    ed.say(key!("Nothing to undo."));
                 } else {
                     ed.undo()?;
                     edits -= 1;

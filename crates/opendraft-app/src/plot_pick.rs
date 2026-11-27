@@ -29,7 +29,7 @@ pub fn ask_window(ed: &Editor) -> Result<(Point, Point), Cancelled> {
         if first.x != second.x && first.y != second.y {
             return Ok((first, second));
         }
-        ed.say("The window has no width or no height.");
+        ed.say(key!("The window has no width or no height."));
     }
 }
 

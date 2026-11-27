@@ -7,6 +7,7 @@ use opendraft_commands::{SetDimStyle, SysVar, Value};
 use opendraft_core::{AngleFormat, Arrow, DimStyle, LengthFormat};
 
 use crate::state::AppState;
+use opendraft_ui::key;
 
 impl AppState {
     /// The style new dimensions are made with.
@@ -22,7 +23,7 @@ impl AppState {
             return;
         }
         self.perform(SetDimStyle::new(style));
-        self.message = "Dimension style changed".to_owned();
+        self.message = key!("Dimension style changed").to_owned();
     }
 }
 
@@ -228,7 +229,7 @@ pub fn variables() -> Vec<SysVar<AppState>> {
             |s, v| {
                 let factor = real(v);
                 if factor == 0.0 {
-                    return Err("Requires a value other than zero.".to_owned());
+                    return Err(key!("Requires a value other than zero.").to_owned());
                 }
                 change(s, |d| d.linear_factor = factor)
             },
@@ -274,7 +275,7 @@ pub fn variables() -> Vec<SysVar<AppState>> {
                 let mut chars = text(v).chars().collect::<Vec<_>>();
                 match (chars.pop(), chars.is_empty()) {
                     (Some(c), true) => change(s, |d| d.decimal_separator = c),
-                    _ => Err("Requires a single character.".to_owned()),
+                    _ => Err(key!("Requires a single character.").to_owned()),
                 }
             },
         },
@@ -334,7 +335,7 @@ pub fn variables() -> Vec<SysVar<AppState>> {
                     "_OPEN" => Arrow::Open,
                     "_ARCHTICK" => Arrow::Tick,
                     "_NONE" => Arrow::None,
-                    _ => return Err("Use . _OPEN _ARCHTICK or _NONE.".to_owned()),
+                    _ => return Err(key!("Use . _OPEN _ARCHTICK or _NONE.").to_owned()),
                 };
                 change(s, |d| d.arrow = arrow)
             },

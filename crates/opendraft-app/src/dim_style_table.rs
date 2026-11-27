@@ -7,6 +7,8 @@ use opendraft_core::text_style::MAX_NAME_BYTES;
 use opendraft_core::DimStyle;
 
 use crate::state::AppState;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// Which style the Modify Dimension Style dialog is editing.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -25,9 +27,9 @@ pub enum DimEdit {
 pub fn name_problem(styles: &[DimStyle], name: &str, ignoring: Option<&str>) -> Option<String> {
     let name = name.trim();
     if name.is_empty() {
-        Some("Type a name.".to_owned())
+        Some(key!("Type a name.").to_owned())
     } else if name.len() > MAX_NAME_BYTES {
-        Some("That name is too long.".to_owned())
+        Some(key!("That name is too long.").to_owned())
     } else if styles.iter().any(|s| {
         s.name.eq_ignore_ascii_case(name) && ignoring.is_none_or(|o| !o.eq_ignore_ascii_case(name))
     }) {
@@ -70,7 +72,10 @@ impl AppState {
             style,
             Vec::new(),
         ));
-        self.message = format!("Current dimension style is {name}");
+        self.set_message(Wording::new(
+            key!("Current dimension style is %{name}"),
+            &[("name", name)],
+        ));
     }
 
     /// Add a style to the table (not made current).
@@ -89,7 +94,10 @@ impl AppState {
             current,
             Vec::new(),
         ));
-        self.message = format!("Dimension style {} created", style.name);
+        self.set_message(Wording::new(
+            key!("Dimension style %{name} created"),
+            &[("name", &style.name)],
+        ));
         Ok(())
     }
 
@@ -126,7 +134,7 @@ impl AppState {
             current,
             edits,
         ));
-        self.message = "Dimension style changed".to_owned();
+        self.message = key!("Dimension style changed").to_owned();
     }
 
     /// Give a style another name; its dimensions follow. Standard stays.
@@ -134,7 +142,7 @@ impl AppState {
         let to = to.trim();
         let doc = self.session().document();
         if is_standard(from) {
-            return Err("Standard cannot be renamed.".to_owned());
+            return Err(key!("Standard cannot be renamed.").to_owned());
         }
         if let Some(problem) = name_problem(doc.dim_styles(), to, Some(from)) {
             return Err(problem);
@@ -179,10 +187,10 @@ impl AppState {
 
     pub fn delete_dim_style(&mut self, name: &str) -> Result<(), String> {
         if !self.can_delete_dim_style(name) {
-            return Err(
+            return Err(key!(
                 "Standard, the current style and a style that dimensions use cannot be deleted."
-                    .to_owned(),
-            );
+            )
+            .to_owned());
         }
         let doc = self.session().document();
         let mut table = doc.dim_styles().to_vec();

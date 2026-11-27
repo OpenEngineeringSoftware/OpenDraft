@@ -17,6 +17,7 @@ use opendraft_core::plot::PlotSpace;
 use opendraft_ui::key;
 
 use crate::layouts::PageDraft;
+use crate::plot_line_said::*;
 use crate::plot_state::PlotFormat;
 use crate::print_backend::{PrintBackend, Printer, PrinterId};
 
@@ -122,10 +123,6 @@ pub fn parse_paper(text: &str, landscape: bool) -> Option<(String, f64, f64)> {
     })
 }
 
-fn say_names(ed: &Editor, what: &str, names: &[String]) {
-    ed.say(format!("{what}: {}", names.join(", ")));
-}
-
 fn yes_no(ed: &Editor, message: &str, default: bool) -> Result<bool, Cancelled> {
     let options = Options::<String>::new(message)
         .keyword("Yes", "Y")
@@ -183,13 +180,17 @@ fn detailed(ed: &Editor, draft: &mut PageDraft) -> Result<(), Cancelled> {
         let answer = text(ed, key!("Enter paper size or [?]"), &current)?;
         if answer == "?" {
             let names: Vec<String> = PAPER_SIZES.iter().map(|(n, ..)| (*n).to_owned()).collect();
-            say_names(ed, "Paper sizes (or width,height in mm)", &names);
+            say_names(
+                ed,
+                key!("Paper sizes (or width,height in mm): %{names}"),
+                &names,
+            );
         } else if let Some((name, w, h)) = parse_paper(&answer, landscape) {
             (draft.width, draft.height) = (w, h);
             draft.plot.canonical_media_name = name;
             break;
         } else {
-            ed.say(format!("\"{answer}\" is not a paper size."));
+            refuse(ed, NOT_A_PAPER, &answer);
         }
     }
     let units = Options::<String>::new(key!("Enter paper units"))
@@ -226,7 +227,7 @@ fn detailed(ed: &Editor, draft: &mut PageDraft) -> Result<(), Cancelled> {
     );
     area(ed, draft)?;
     scale_and_offset(ed, draft)?;
-    ed.say("Plot styles are not applied yet: the layout's style table and plot-style options are left as they are.");
+    ed.say(key!("Plot styles are not applied yet: the layout's style table and plot-style options are left as they are."));
     let plot = &mut draft.plot;
     let lineweights = yes_no(
         ed,
@@ -267,7 +268,9 @@ fn area(ed: &Editor, draft: &mut PageDraft) -> Result<(), Cancelled> {
             .default("Layout".to_owned());
         match ed.ask_keyword(options)?.as_deref().unwrap_or("Layout") {
             "Display" | "View" => {
-                ed.say("That plot area is not available: use Extents, Limits, Window or Layout.");
+                ed.say(key!(
+                    "That plot area is not available: use Extents, Limits, Window or Layout."
+                ));
                 continue;
             }
             "Extents" => draft.plot.area = PlotArea::Extents,
@@ -304,9 +307,7 @@ fn scale_and_offset(ed: &Editor, draft: &mut PageDraft) -> Result<(), Cancelled>
                 draft.plot.scale = scale;
                 break;
             }
-            None => ed.say(format!(
-                "\"{answer}\" is not a scale; try 1:50, 2:1 or Fit."
-            )),
+            None => refuse(ed, NOT_A_SCALE, &answer),
         }
     }
     loop {
@@ -327,7 +328,7 @@ fn scale_and_offset(ed: &Editor, draft: &mut PageDraft) -> Result<(), Cancelled>
                 draft.plot.origin_mm = offset;
                 return Ok(());
             }
-            None => ed.say(format!("\"{answer}\" is not an offset; type x,y.")),
+            None => refuse(ed, NOT_AN_OFFSET, &answer),
         }
     }
 }
@@ -349,7 +350,7 @@ pub fn plot_prompt(ed: &mut Editor, setup: Setup) -> Result<(), Cancelled> {
     while draft.is_none() {
         let answer = text(ed, key!("Enter a layout name or [?]"), &active)?;
         if answer == "?" {
-            say_names(ed, "Layouts", &names);
+            say_names(ed, key!("Layouts: %{names}"), &names);
             continue;
         }
         let wanted = answer.trim().to_owned();
@@ -367,7 +368,7 @@ pub fn plot_prompt(ed: &mut Editor, setup: Setup) -> Result<(), Cancelled> {
             PageDraft::of(d, space)
         })?;
         if draft.is_none() {
-            ed.say(format!("There is no layout called \"{answer}\"."));
+            refuse(ed, NO_LAYOUT, &answer);
         }
     }
     let Some(mut draft) = draft else {
@@ -382,11 +383,11 @@ pub fn plot_prompt(ed: &mut Editor, setup: Setup) -> Result<(), Cancelled> {
         if answer == "?" {
             let mut names = vec![DEVICE_PDF.to_owned(), DEVICE_SVG.to_owned()];
             names.extend(printers.iter().map(|p| p.id.0.clone()));
-            say_names(ed, "Output devices", &names);
+            say_names(ed, key!("Output devices: %{names}"), &names);
         } else if let Some(device) = resolve_device(&answer, &printers) {
             break device;
         } else {
-            ed.say(format!("There is no output device called \"{answer}\"."));
+            refuse(ed, NO_DEVICE, &answer);
         }
     };
     draft.plot.device_name = device.name();

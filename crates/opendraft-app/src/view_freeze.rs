@@ -11,6 +11,7 @@ use opendraft_commands::SetLayouts;
 use opendraft_core::{Document, Layer, LayerId, Layout, LayoutId, Viewport};
 
 use crate::state::AppState;
+use opendraft_ui::key;
 
 /// What the VP Freeze switch freezes layers in.
 #[derive(Clone, Copy, Debug)]
@@ -148,7 +149,7 @@ impl AppState {
     fn not_current(&mut self, layers: &[LayerId], freeze: bool) -> Vec<LayerId> {
         let current = self.session().document().current_layer();
         if freeze && layers.contains(&current) {
-            self.message = "The current layer cannot be frozen".to_owned();
+            self.message = key!("The current layer cannot be frozen").to_owned();
         }
         let kept = layers.iter().copied();
         kept.filter(|&id| !(freeze && id == current)).collect()

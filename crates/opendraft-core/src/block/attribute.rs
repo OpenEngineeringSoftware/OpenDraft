@@ -259,13 +259,13 @@ impl AttributeReference {
 /// Why `tag` cannot be an attribute tag, if it cannot.
 pub fn tag_problem(tag: &str) -> Option<&'static str> {
     if tag.is_empty() {
-        Some("An attribute tag cannot be empty.")
+        Some(key!("An attribute tag cannot be empty."))
     } else if tag.len() > MAX_TAG_BYTES {
-        Some("An attribute tag is too long.")
+        Some(key!("An attribute tag is too long."))
     } else if tag.chars().any(|c| c.is_whitespace() || c.is_control()) {
-        Some("An attribute tag cannot contain spaces.")
+        Some(key!("An attribute tag cannot contain spaces."))
     } else if tag.contains('!') {
-        Some("An attribute tag cannot contain \"!\".")
+        Some(key!("An attribute tag cannot contain \"!\"."))
     } else {
         None
     }

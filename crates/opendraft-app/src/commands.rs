@@ -42,6 +42,7 @@ use crate::stretch::stretch_objects;
 
 use crate::dock::{LayoutRequest, PanelTab};
 use crate::state::AppState;
+use opendraft_ui::key;
 
 pub fn build_registry() -> Registry<AppState> {
     let mut registry = Registry::default();
@@ -106,7 +107,11 @@ fn all() -> Vec<Command<AppState>> {
     vec![
         cmd("file.new", "New", |s| {
             s.new_document();
-            s.message = format!("Created {}", s.docs[s.active].title);
+            let title = s.docs[s.active].title.clone();
+            s.set_message(opendraft_commands::Wording::new(
+                opendraft_ui::key!("Created %{name}"),
+                &[("name", &title)],
+            ));
         })
         .key("Ctrl+N")
         .global(),
@@ -272,7 +277,7 @@ fn all() -> Vec<Command<AppState>> {
             opendraft_canvas::Space::Paper(layout) => {
                 s.start_command("MVIEW", move |ed| mview(ed, layout))
             }
-            _ => s.message = "MVIEW works in a layout's paper space".to_owned(),
+            _ => s.message = key!("MVIEW works in a layout's paper space").to_owned(),
         })
         .checked(|s| s.is_running("MVIEW"))
         .transparent(),
@@ -280,12 +285,14 @@ fn all() -> Vec<Command<AppState>> {
             Some((layout, viewport)) => {
                 s.start_command("VPSCALE", move |ed| vpscale(ed, layout, viewport))
             }
-            None => s.message = "Pick a viewport, or enter one with MSPACE".to_owned(),
+            None => s.message = key!("Pick a viewport, or enter one with MSPACE").to_owned(),
         })
         .checked(|s| s.is_running("VPSCALE"))
         .transparent(),
         cmd("layout.vplayer", "VPLAYER", |s| match s.space() {
-            opendraft_canvas::Space::Model => s.message = "VPLAYER works in a layout".to_owned(),
+            opendraft_canvas::Space::Model => {
+                s.message = key!("VPLAYER works in a layout").to_owned()
+            }
             space => {
                 let current = s.target_viewport().map(|(_, v)| v);
                 let layout = space.layout().unwrap_or(opendraft_core::LayoutId(0));

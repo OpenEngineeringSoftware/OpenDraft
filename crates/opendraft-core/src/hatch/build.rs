@@ -27,12 +27,12 @@ pub enum BuildError {
 impl std::fmt::Display for BuildError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Nothing => write!(f, "none of the objects can bound a hatch"),
+            Self::Nothing => f.write_str(key!("none of the objects can bound a hatch")),
             Self::Open(n) => write!(
                 f,
                 "{n} of the objects do not form a closed boundary (the ends do not meet)"
             ),
-            Self::TooMany => write!(f, "too many boundaries"),
+            Self::TooMany => f.write_str(key!("too many boundaries")),
         }
     }
 }

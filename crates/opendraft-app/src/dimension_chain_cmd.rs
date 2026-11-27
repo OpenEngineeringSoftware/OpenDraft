@@ -45,7 +45,7 @@ fn select(ed: &mut Editor) -> Result<Base, Cancelled> {
                     from_second,
                 });
             }
-            _ => ed.say("Select a linear or aligned dimension."),
+            _ => ed.say(key!("Select a linear or aligned dimension.")),
         }
     }
 }
@@ -87,7 +87,7 @@ fn chain(ed: &mut Editor, baseline: bool) -> Result<(), Cancelled> {
         match ed.ask_point(options)? {
             Answer::Value(at) => {
                 let Some(dimension) = make(at, &from) else {
-                    ed.say("Those points make no dimension.");
+                    ed.say(key!("Those points make no dimension."));
                     continue;
                 };
                 add(
@@ -106,7 +106,7 @@ fn chain(ed: &mut Editor, baseline: bool) -> Result<(), Cancelled> {
                     ed.undo()?;
                     base = previous;
                 }
-                None => ed.say("Nothing to undo."),
+                None => ed.say(key!("Nothing to undo.")),
             },
             Answer::Keyword(_) => base = select(ed)?,
             Answer::Enter => return Ok(()),

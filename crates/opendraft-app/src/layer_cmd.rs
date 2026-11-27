@@ -11,7 +11,7 @@ use opendraft_ui::key;
 
 use crate::layer_switch;
 use crate::state::AppState;
-use crate::text::plural;
+use opendraft_commands::Wording;
 
 /// The layer commands, for the command table.
 pub fn commands() -> Vec<Command<AppState>> {
@@ -67,7 +67,7 @@ impl AppState {
         if thawed.is_empty() {
             return;
         }
-        self.message = "All layers have been thawed.".to_owned();
+        self.message = key!("All layers have been thawed.").to_owned();
         self.cmdline.say(self.message.clone());
         self.perform(ModifyLayers::new("Thaw all layers", thawed));
     }
@@ -102,7 +102,10 @@ pub fn unlock_layer(ed: &mut Editor) -> Result<(), Cancelled> {
         return Ok(());
     };
     if !layer.locked {
-        ed.say(format!("Layer \"{}\" is not locked.", layer.name));
+        ed.say(Wording::new(
+            key!("Layer \"%{name}\" is not locked."),
+            &[("name", &layer.name)],
+        ));
         return Ok(());
     }
     let name = layer.name.clone();
@@ -114,7 +117,10 @@ pub fn unlock_layer(ed: &mut Editor) -> Result<(), Cancelled> {
             ..layer
         },
     )?;
-    ed.say(format!("Layer \"{name}\" has been unlocked."));
+    ed.say(Wording::new(
+        key!("Layer \"%{name}\" has been unlocked."),
+        &[("name", &name)],
+    ));
     Ok(())
 }
 
@@ -157,7 +163,10 @@ pub fn make_current(ed: &mut Editor) -> Result<(), Cancelled> {
         Ok(name)
     })?;
     if let Some(name) = name {
-        ed.say(format!("{name} is now the current layer."));
+        ed.say(Wording::new(
+            key!("%{name} is now the current layer."),
+            &[("name", &name)],
+        ));
     }
     Ok(())
 }
@@ -188,10 +197,11 @@ pub fn match_layer(ed: &mut Editor) -> Result<(), Cancelled> {
         }
         Ok((changed, name))
     })?;
-    ed.say(format!(
-        "{} changed to layer \"{name}\".",
-        plural(changed, "object")
-    ));
+    let said = Wording::new(
+        key!("%{objects} changed to layer \"%{name}\"."),
+        &[("name", &name)],
+    );
+    ed.say(said.part("objects", crate::text::objects(changed)));
     Ok(())
 }
 
@@ -219,7 +229,10 @@ fn destination(ed: &mut Editor) -> Result<Option<LayerId>, Cancelled> {
                 })?;
                 match found {
                     Some(layer) => return Ok(Some(layer)),
-                    None => ed.say(format!("Layer \"{}\" not found.", typed.trim())),
+                    None => ed.say(Wording::new(
+                        key!("Layer \"%{name}\" not found."),
+                        &[("name", typed.trim())],
+                    )),
                 }
             }
             Answer::Enter => return Ok(None),

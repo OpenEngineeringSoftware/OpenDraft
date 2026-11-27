@@ -20,6 +20,8 @@ use opendraft_files::{FileFormat, NativeFormat};
 
 use crate::state::AppState;
 use crate::text::plural;
+use opendraft_commands::Wording;
+use opendraft_ui::key;
 
 /// The first word of the text put on the system clipboard.
 const MARK: &str = "opendraft-clipboard";
@@ -179,10 +181,11 @@ impl AppState {
         let document = self.docs[self.active].session.document();
         match Clipboard::of(document, ids, base) {
             Some(clip) => {
-                self.message = format!("Copied {}", plural(clip.count(), "object"));
+                let said = Wording::new(key!("Copied %{objects}"), &[]);
+                self.set_message(said.part("objects", crate::text::objects(clip.count())));
                 self.clipboard.set(clip);
             }
-            None => self.message = "Nothing to copy".to_owned(),
+            None => self.message = key!("Nothing to copy").to_owned(),
         }
     }
 
@@ -192,13 +195,13 @@ impl AppState {
         self.copy_to_clipboard(&ids, None);
         if !ids.is_empty() {
             self.perform(RemoveEntities::new(ids));
-            self.message = "Cut to the clipboard".to_owned();
+            self.message = key!("Cut to the clipboard").to_owned();
         }
     }
 
     fn paste_clipboard(&mut self, how: Paste) {
         let Some(clip) = self.clipboard.current() else {
-            self.message = "The clipboard is empty".to_owned();
+            self.message = key!("The clipboard is empty").to_owned();
             return;
         };
         if how == Paste::Original {
@@ -261,14 +264,15 @@ fn with_warnings(said: String, sink: &WarningSink) -> String {
 
 /// COPYBASE: pick objects and a base point, and copy them with it.
 fn copy_with_base(ed: &mut Editor, slot: ClipboardSlot) -> Result<(), Cancelled> {
-    let ids = ed.pickset_or_select("Select objects")?;
-    let base = ed.get_point("Specify base point")?;
+    let ids = ed.pickset_or_select(key!("Select objects"))?;
+    let base = ed.get_point(key!("Specify base point"))?;
     match ed.read(move |doc| Clipboard::of(doc, &ids, Some(base)))? {
         Some(clip) => {
-            ed.say(format!("Copied {}", plural(clip.count(), "object")));
+            let said = Wording::new(key!("Copied %{objects}"), &[]);
+            ed.say(said.part("objects", crate::text::objects(clip.count())));
             slot.set(clip);
         }
-        None => ed.say("Nothing to copy"),
+        None => ed.say(key!("Nothing to copy")),
     }
     Ok(())
 }

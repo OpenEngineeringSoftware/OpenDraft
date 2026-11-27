@@ -34,7 +34,7 @@ fn settings_of(h: &HatchEntity, mut m: Memory, ccs: Ccs) -> Result<Memory, Strin
     match &h.fill {
         HatchFill::Solid => m.fill = FillChoice::Solid,
         HatchFill::Gradient(_) => {
-            return Err("A gradient hatch cannot be edited here yet.".to_owned());
+            return Err(key!("A gradient hatch cannot be edited here yet.").to_owned());
         }
         HatchFill::Pattern(p) => {
             m.angle = ccs.angle_from_world(p.angle);
@@ -97,7 +97,7 @@ fn choose(ed: &Editor) -> Result<(EntityId, HatchEntity), Cancelled> {
         let mut found = ed.read(move |doc| find(doc, &[id]))?;
         match found.pop() {
             Some(hatch) => return Ok(hatch),
-            None => ed.say("That is not a hatch."),
+            None => ed.say(key!("That is not a hatch.")),
         }
     }
 }
@@ -119,7 +119,10 @@ pub fn hatch_edit(ed: &mut Editor) -> Result<(), Cancelled> {
         let new = match edited(&hatch, &settings, ccs) {
             Ok(h) => h,
             Err(why) => {
-                ed.say(format!("Unable to hatch: {why}"));
+                ed.say(crate::message_language::because(
+                    key!("Unable to hatch: %{why}"),
+                    why,
+                ));
                 adjust(ed, "Pattern")?;
                 continue;
             }
@@ -128,7 +131,10 @@ pub fn hatch_edit(ed: &mut Editor) -> Result<(), Cancelled> {
             .evaluate(check_tolerance(&new), &HatchLimits::default())
             .err();
         if let Some(why) = &problem {
-            ed.say(format!("The hatch cannot be drawn: {why}."));
+            ed.say(crate::message_language::because(
+                key!("The hatch cannot be drawn: %{why}."),
+                why,
+            ));
         }
         ed.say(summary(&ed.defaults().hatch.get()));
         let shown = new.clone();
@@ -141,14 +147,14 @@ pub fn hatch_edit(ed: &mut Editor) -> Result<(), Cancelled> {
         match ed.ask_point(options)? {
             Answer::Keyword(k) => adjust(ed, &k)?,
             Answer::Value(_) | Answer::Enter if problem.is_some() => {
-                ed.say("Change the scale or spacing first.");
+                ed.say(key!("Change the scale or spacing first."));
             }
             Answer::Value(_) | Answer::Enter => {
                 ed.transaction("Hatch edit", move |tx| {
                     tx.modify(id, |_| Entity::Hatch(Box::new(new)));
                     Ok(())
                 })?;
-                ed.say("Hatch changed.");
+                ed.say(key!("Hatch changed."));
                 return Ok(());
             }
         }

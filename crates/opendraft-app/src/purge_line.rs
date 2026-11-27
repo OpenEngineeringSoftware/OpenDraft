@@ -8,17 +8,18 @@ use opendraft_ui::key;
 
 use crate::power_select::wildcard_match;
 use crate::purge_cmd::{purge_run, Purge};
+use opendraft_commands::Wording;
 
 /// AutoCAD's other kinds, which OpenDraft has nothing of to purge.
 const UNAVAILABLE: [(&str, &str, &str); 10] = [
-    ("Groups", "G", "groups"),
-    ("MAterials", "MA", "materials"),
-    ("PLotstyles", "PL", "plot styles"),
-    ("SHapes", "SH", "shapes"),
-    ("Mlinestyles", "ML", "multiline styles"),
-    ("Tablestyles", "TA", "table styles"),
-    ("Visualstyles", "V", "visual styles"),
-    ("Regapps", "R", "registered applications"),
+    ("Groups", "G", key!("groups")),
+    ("MAterials", "MA", key!("materials")),
+    ("PLotstyles", "PL", key!("plot styles")),
+    ("SHapes", "SH", key!("shapes")),
+    ("Mlinestyles", "ML", key!("multiline styles")),
+    ("Tablestyles", "TA", key!("table styles")),
+    ("Visualstyles", "V", key!("visual styles")),
+    ("Regapps", "R", key!("registered applications")),
     ("detail View styles", "DE", "detail view styles"),
     ("orphaned Data", "O", "orphaned DGN linestyle data"),
 ];
@@ -51,18 +52,20 @@ fn matching(ed: &Editor, category: Category, patterns: &str) -> Result<Vec<Item>
         for b in stays.iter().filter(|b| b.item.category() == category) {
             if wildcard_match(pattern, &b.name) {
                 any = true;
-                ed.say(format!(
-                    "\"{}\" cannot be purged: {}.",
-                    b.name,
-                    b.reasons.join("; ")
-                ));
+                let why = Wording::plain(b.reasons.join("; "));
+                let said = Wording::new(
+                    key!("\"%{name}\" cannot be purged: %{why}."),
+                    &[("name", &b.name)],
+                );
+                ed.say(said.part("why", why));
             }
         }
         if !any {
-            ed.say(format!(
-                "No {} match \"{pattern}\".",
-                category.title().to_lowercase()
-            ));
+            let said = Wording::new(
+                key!("Nothing in %{category} matches \"%{pattern}\"."),
+                &[("pattern", pattern)],
+            );
+            ed.say(said.part("category", Wording::plain(category.title())));
         }
     }
     Ok(items)
@@ -94,9 +97,11 @@ pub fn purge_prompt(ed: &mut Editor) -> Result<(), Cancelled> {
         .ask_keyword(options.default("All".to_owned()))?
         .unwrap_or_else(|| "All".to_owned());
     if let Some((_, _, what)) = UNAVAILABLE.iter().find(|(label, ..)| *label == choice) {
-        ed.say(format!(
-            "There are no {what} to purge: OpenDraft does not store them."
-        ));
+        let said = Wording::new(
+            key!("There are no %{what} to purge: OpenDraft does not store them."),
+            &[],
+        );
+        ed.say(said.part("what", Wording::plain(*what)));
         return Ok(());
     }
     let mut purge = Purge::default();
@@ -122,7 +127,7 @@ pub fn purge_prompt(ed: &mut Editor) -> Result<(), Cancelled> {
             };
             let items = matching(ed, *category, &names)?;
             if items.is_empty() {
-                ed.say("Nothing to purge.");
+                ed.say(key!("Nothing to purge."));
                 return Ok(());
             }
             purge.only = Some(items);

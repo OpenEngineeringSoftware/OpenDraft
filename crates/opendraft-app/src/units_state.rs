@@ -9,6 +9,7 @@ use opendraft_core::{AngleFormat, Units};
 
 use crate::coordinates::Reading;
 use crate::state::AppState;
+use opendraft_ui::key;
 
 impl AppState {
     /// The active drawing's units.
@@ -30,7 +31,7 @@ impl AppState {
             return;
         }
         self.perform(SetUnits::new(units));
-        self.message = "Units changed".to_owned();
+        self.message = key!("Units changed").to_owned();
     }
 }
 
@@ -48,7 +49,7 @@ impl AppState {
             return;
         }
         self.perform(SetProperties::new(properties));
-        self.message = "Drawing properties changed".to_owned();
+        self.message = key!("Drawing properties changed").to_owned();
     }
 }
 
