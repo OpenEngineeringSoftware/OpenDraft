@@ -130,6 +130,35 @@ impl Document {
         Some(doc)
     }
 
+    /// Block `id` as a drawing of its own, the way AutoCAD's WBLOCK writes a
+    /// file: the block's objects are the drawing's, where they are (the base
+    /// point is not moved to the origin), the blocks they nest stay as
+    /// definitions, the block itself is not a definition, and the insert unit
+    /// is the block's. The caller keeps the base point for `$INSBASE`. `None`
+    /// for an unknown block.
+    pub fn block_as_drawing(&self, id: BlockId) -> Option<Document> {
+        let block = self.block(id)?.clone();
+        let mut doc = Document {
+            objects: Vec::new(),
+            positions: Default::default(),
+            layouts: Vec::new(),
+            active_layout: None,
+            active_frozen: Vec::new(),
+            hidden_objects: Vec::new(),
+            active_viewport: None,
+            view_twist: 0.0,
+            model_ccs: crate::ccs::Ccs::WORLD,
+            ccs_previous: Vec::new(),
+            ..self.clone_tables()
+        };
+        doc.blocks.retain(|b| b.id != id);
+        doc.units.insert = block.unit;
+        for e in &block.entities {
+            doc.add_with_id(EntityId(e.id.0), e.entity.clone(), e.attrs.clone());
+        }
+        Some(doc)
+    }
+
     /// The dynamic schema a Block Editor drawing is authoring: `None` for a
     /// drawing, and for an editor of an ordinary block.
     pub fn block_editor_dynamic(&self) -> Option<&crate::block::DynamicBlock> {

@@ -40,6 +40,14 @@ pub fn oblock_filter() -> (&'static str, &'static [&'static str]) {
     ("OpenDraft block", &[EXTENSION])
 }
 
+/// Writes `file` as a DXF to `path` (AutoCAD's WBLOCK layout, with our marker:
+/// see `BlockFile::to_dxf`). Returns what did not carry across.
+pub(crate) fn write_block_dxf(file: &BlockFile, path: &Path) -> Result<Vec<String>, String> {
+    let (bytes, notes) = file.to_dxf().map_err(|e| e.to_string())?;
+    std::fs::write(path, bytes).map_err(|e| format!("Could not write {}: {e}", path.display()))?;
+    Ok(notes)
+}
+
 impl Doc {
     /// Writes the block the editor holds into the file, as it is saved in the
     /// container. Nothing is written when it is not a block file's tab.
@@ -90,6 +98,48 @@ impl AppState {
         self.open_block_editor(root);
         self.commit_recent(path);
         true
+    }
+
+    /// Export the block file in the active tab as a DXF, for other CAD
+    /// programs. It is the block as last saved: changes in the editor are not
+    /// in it, so they are asked to be saved first.
+    pub(crate) fn export_oblock_dxf(&mut self) -> bool {
+        let doc = &self.docs[self.active];
+        let Some(link) = doc.oblock.as_ref() else {
+            return false;
+        };
+        if doc.is_modified() {
+            self.tell("Save the block first (BSAVE), then export it.");
+            return false;
+        }
+        let file = link.file.clone();
+        let suggested = format!("{}.dxf", file.name());
+        let directory = self.folder_for_dialogs(doc.path.as_deref());
+        let Some(chosen) = self.picker.save(
+            "Export DXF",
+            &suggested,
+            directory.as_deref(),
+            opendraft_files::dxf_filter(),
+        ) else {
+            return false;
+        };
+        let path = chosen.with_extension("dxf");
+        match write_block_dxf(&file, &path) {
+            Ok(notes) => {
+                for note in notes {
+                    self.cmdline.say(note);
+                }
+                self.tell(Wording::new(
+                    key!("Exported %{name}"),
+                    &[("name", &display_name(&path))],
+                ));
+                true
+            }
+            Err(why) => {
+                self.tell(why);
+                false
+            }
+        }
     }
 
     /// Save the block file in tab `index`: BSAVE, which writes the file too.

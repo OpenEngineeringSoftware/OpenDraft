@@ -98,9 +98,9 @@ fn another_kind_of_file_name_is_refused_and_asked_again() {
     let dir = tempfile::tempdir().expect("dir");
     let mut state = with_box();
     start(&mut state, dir.path());
-    submit_all(&mut state, &["Box", "Box.dxf"]);
+    submit_all(&mut state, &["Box", "Box.txt"]);
     assert!(said(&state, "ends in .oblock"));
-    assert!(!dir.path().join("Box.dxf").exists());
+    assert!(!dir.path().join("Box.txt").exists());
     submit_all(&mut state, &["Fine"]);
     assert!(dir.path().join("Fine.oblock").exists());
 }
@@ -113,4 +113,22 @@ fn a_block_that_is_not_there_writes_nothing() {
     submit_all(&mut state, &["Nope"]);
     assert!(said(&state, "not found"));
     assert_eq!(std::fs::read_dir(dir.path()).expect("dir").count(), 0);
+}
+
+#[test]
+fn a_dxf_name_writes_a_dxf_that_comes_back_as_the_same_block() {
+    let dir = tempfile::tempdir().expect("dir");
+    let mut state = with_box();
+    start(&mut state, dir.path());
+    submit_all(&mut state, &["Box", "Box.dxf"]);
+    let path = dir.path().join("Box.dxf");
+    assert!(said(&state, "written to"));
+    let bytes = std::fs::read(&path).expect("the dxf");
+    let opendraft_content::oblock::DxfBlock::One { file, .. } =
+        BlockFile::from_dxf(&bytes, "other").expect("read")
+    else {
+        unreachable!("the symbol is in model space");
+    };
+    assert_eq!(file.name(), "Box");
+    assert_eq!(file.definition().expect("def").base, p(10.0, 10.0));
 }

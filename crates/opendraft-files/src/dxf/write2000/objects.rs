@@ -19,10 +19,12 @@ pub(super) fn write_objects(
     ids: &Ids,
     document: &Document,
     leaders: bool,
+    marker: Option<&str>,
 ) -> Result<(), FileError> {
     let layouts = super::sheets(document);
     let (root, groups, layout_dict, plot_settings, plot_styles) =
         (h.next(), h.next(), h.next(), h.next(), h.next());
+    let marker = marker.map(|text| (h.next(), text));
     out.section("OBJECTS");
     let dictionary = |out: &mut Out, handle: u32, owner: u32, entries: &[(String, u32)]| {
         out.pair(0, "DICTIONARY");
@@ -42,12 +44,18 @@ pub(super) fn write_objects(
     if leaders {
         entries.push(("ACAD_MLEADERSTYLE".to_owned(), ids.mleader_dict));
     }
+    if let Some((handle, _)) = marker {
+        entries.push((crate::dxf::block_file::MARKER_KEY.to_owned(), handle));
+    }
     entries.extend([
         ("ACAD_PLOTSETTINGS".to_owned(), plot_settings),
         ("ACAD_PLOTSTYLENAME".to_owned(), plot_styles),
     ]);
     dictionary(out, root, 0, &entries);
     dictionary(out, groups, root, &[]);
+    if let Some((handle, text)) = marker {
+        crate::dxf::block_file::write_marker(out, handle, root, text);
+    }
     let mut entries = vec![("Model".to_owned(), ids.model_layout)];
     entries.extend(
         layouts
