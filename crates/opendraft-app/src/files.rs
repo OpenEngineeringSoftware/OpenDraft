@@ -145,6 +145,9 @@ impl AppState {
             self.set_message(said);
             return true;
         }
+        if crate::oblock_doc::is_oblock(path) {
+            return self.open_oblock(path);
+        }
         if !self.hold_if_large(path) {
             self.begin_open(path);
         }
@@ -189,6 +192,9 @@ impl AppState {
 
     /// Save drawing `index` to its file, or ask where if it has none.
     pub fn save_doc(&mut self, index: usize) -> bool {
+        if self.docs.get(index).is_some_and(|d| d.oblock.is_some()) {
+            return self.save_oblock(index);
+        }
         match self.docs.get(index).map(|d| d.path.clone()) {
             Some(Some(path)) => self.write_doc(index, &path),
             Some(None) => self.save_doc_as(index),
@@ -202,6 +208,9 @@ impl AppState {
         let Some(doc) = self.docs.get(index) else {
             return false;
         };
+        if doc.oblock.is_some() {
+            return self.save_oblock_as(index);
+        }
         // A recovered drawing has no file of its own: its original is only
         // where to start, so saving can never silently replace it.
         let (title, suggested, directory) = match &doc.recovery_origin {

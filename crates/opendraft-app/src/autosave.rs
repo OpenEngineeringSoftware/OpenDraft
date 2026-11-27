@@ -41,7 +41,7 @@ impl AppState {
         };
         let mut writes = Vec::new();
         let mut removals = Vec::new();
-        for doc in &mut self.docs {
+        for doc in self.docs.iter_mut().filter(|d| d.oblock.is_none()) {
             let position = doc.drawing().history().position();
             match (doc.is_modified(), doc.autosaved) {
                 (true, last) if last != Some(position) => writes.push((

@@ -25,7 +25,7 @@ mod info;
 mod organise;
 mod search;
 mod state;
-mod store;
+pub(crate) mod store;
 mod trash;
 
 pub use capture::{CaptureRequest, Captured, NameTaken};

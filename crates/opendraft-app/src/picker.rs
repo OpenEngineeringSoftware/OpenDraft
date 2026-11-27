@@ -100,7 +100,14 @@ impl FilePicker for NativePicker {
         if let Some(directory) = directory {
             dialog = dialog.set_directory(directory);
         }
-        for (name, extensions) in opendraft_files::open_filters() {
+        let mut filters = opendraft_files::open_filters();
+        // A block file opens too (in the Block Editor): see `oblock_doc.rs`.
+        let (block_name, block_extensions) = crate::oblock_doc::oblock_filter();
+        if let Some(all) = filters.first_mut() {
+            all.1.extend(block_extensions);
+        }
+        filters.push((block_name.to_owned(), block_extensions.to_vec()));
+        for (name, extensions) in filters {
             dialog = dialog.add_filter(name, &extensions);
         }
         self.shown(|| dialog.pick_file())

@@ -145,8 +145,14 @@ impl BlocksPackage {
                 supported: KIND_VERSION,
             });
         }
-        let dto = PackageDto::deserialize(&envelope.package)
-            .map_err(|e| PayloadError::Malformed(e.to_string()))?;
+        BlocksPackage::from_value(&envelope.package)
+    }
+
+    /// Reads the payload itself (an envelope's `package`, or an `.oblock`'s)
+    /// and validates it.
+    pub fn from_value(package: &Value) -> Result<BlocksPackage, PayloadError> {
+        let dto =
+            PackageDto::deserialize(package).map_err(|e| PayloadError::Malformed(e.to_string()))?;
         let bytes =
             serde_json::to_vec(&dto.drawing).map_err(|e| PayloadError::Drawing(e.to_string()))?;
         let loaded = NativeFormat
@@ -177,8 +183,16 @@ impl BlocksPackage {
 
     /// The package as an envelope with `header` (whose kind this sets).
     pub fn to_envelope(&self, mut header: Header) -> Result<Envelope, PayloadError> {
-        self.validate()?;
         header.kind_version = KIND_VERSION;
+        Ok(Envelope {
+            header,
+            package: self.to_value()?,
+        })
+    }
+
+    /// The payload itself, validated first.
+    pub fn to_value(&self) -> Result<Value, PayloadError> {
+        self.validate()?;
         let encoded = NativeFormat
             .write(&self.drawing)
             .map_err(|e| PayloadError::Drawing(e.to_string()))?;
@@ -198,9 +212,7 @@ impl BlocksPackage {
                 })
                 .collect(),
         };
-        let package =
-            serde_json::to_value(dto).map_err(|e| PayloadError::Malformed(e.to_string()))?;
-        Ok(Envelope { header, package })
+        serde_json::to_value(dto).map_err(|e| PayloadError::Malformed(e.to_string()))
     }
 
     /// The rules that are not the drawing's own (`Document::validate` covers

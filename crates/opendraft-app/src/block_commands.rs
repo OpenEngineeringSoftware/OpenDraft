@@ -42,6 +42,9 @@ pub fn commands() -> Vec<Command<AppState>> {
                 s.command_dialogs.content.open_on(Place::default());
             },
         ),
+        Command::new("block.wblock", "Write Block", |s: &mut AppState| s.wblock())
+            .checked(|s: &AppState| s.is_running("WBLOCK"))
+            .transparent(),
         editor!("block.library_add", "Add to Library", "LIBADD", library_add),
         editor!(
             "block.library_insert",
