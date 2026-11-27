@@ -167,7 +167,12 @@ impl AppState {
     /// of the drawing, and keep editing. False (with a message) when it
     /// cannot be saved.
     pub fn bsave(&mut self) -> bool {
-        let doc = &mut self.docs[self.active];
+        self.bsave_at(self.active)
+    }
+
+    /// BSAVE for tab `index`. In a block file's tab it writes the file too.
+    pub(crate) fn bsave_at(&mut self, index: usize) -> bool {
+        let doc = &mut self.docs[index];
         let Some(edit) = doc.block_edit.as_mut() else {
             return false;
         };
@@ -213,8 +218,14 @@ impl AppState {
         if saved.is_err() {
             return false;
         }
-        doc.session.mark_saved();
         let name = edit.name.clone();
+        if doc.oblock.is_some() {
+            if let Err(why) = doc.write_oblock() {
+                self.tell(why);
+                return false;
+            }
+        }
+        self.docs[index].session.mark_saved();
         self.tell(Wording::new(
             key!("Block \"%{name}\" saved."),
             &[("name", &name)],
@@ -231,6 +242,11 @@ impl AppState {
         let doc = &self.docs[self.active];
         if doc.block_edit.is_none() {
             return;
+        }
+        // A block file has nothing to go back to: closing the editor closes
+        // the tab, asking about unsaved changes as for a drawing.
+        if doc.oblock.is_some() {
+            return self.request_close(self.active);
         }
         if !doc.session.is_modified() {
             return self.close_block_editor(false);
@@ -283,6 +299,10 @@ impl AppState {
         let Some(doc) = self.docs.get_mut(index) else {
             return true;
         };
+        // A block file's tab is closed whole, by the usual question.
+        if doc.oblock.is_some() {
+            return true;
+        }
         let Some(name) = doc.block_edit.as_ref().map(|e| e.name.clone()) else {
             return true;
         };

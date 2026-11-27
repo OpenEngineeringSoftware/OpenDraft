@@ -42,6 +42,9 @@ pub struct Doc {
     /// The block being edited in the Block Editor, with the drawing set
     /// aside meanwhile (see `block_editor.rs`).
     pub block_edit: Option<Box<crate::block_editor::BlockEdit>>,
+    /// Set when the tab is an `.oblock` file: the Block Editor is all there is
+    /// (see `oblock_doc.rs`).
+    pub oblock: Option<Box<crate::oblock_doc::Link>>,
     /// Stands in for "no drawing open" so there is always something for the
     /// rest of the app to point at. It has no tab and is never saved.
     pub placeholder: bool,
@@ -66,6 +69,7 @@ impl Doc {
             autosaved: None,
             mtext_editor: None,
             block_edit: None,
+            oblock: None,
             placeholder: false,
             recovery_origin: None,
             zoom_to: Default::default(),
@@ -75,6 +79,11 @@ impl Doc {
     /// Whether it has changes that are not in its file. Unsaved changes in
     /// the Block Editor are not in the drawing yet, so they do not count.
     pub fn is_modified(&self) -> bool {
+        // A block file has no drawing of its own: what is unsaved is what
+        // the Block Editor holds.
+        if self.oblock.is_some() {
+            return self.session.is_modified();
+        }
         self.drawing().is_modified()
     }
 

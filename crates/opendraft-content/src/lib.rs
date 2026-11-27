@@ -5,6 +5,7 @@
 pub mod blocks_payload;
 pub mod envelope;
 pub mod library;
+pub mod oblock;
 
 #[cfg(test)]
 mod test_support;

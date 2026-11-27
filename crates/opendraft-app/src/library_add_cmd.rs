@@ -11,10 +11,14 @@ use crate::content_library::now;
 use crate::defaults::EditorDefaults;
 
 /// A drawing that holds the block to copy, and the block in it.
-type Source = (Document, BlockId);
+pub(crate) type Source = (Document, BlockId);
 
 /// What was chosen to add, or `None` when the user ended the command.
-fn choose_source(ed: &mut Editor) -> Result<Option<Source>, Cancelled> {
+/// `prompt` asks which block, as the command words it.
+pub(crate) fn choose_source(
+    ed: &mut Editor,
+    prompt: &'static str,
+) -> Result<Option<Source>, Cancelled> {
     let selected = ed.pickset().to_vec();
     if !selected.is_empty() {
         return from_objects(ed, selected);
@@ -22,8 +26,7 @@ fn choose_source(ed: &mut Editor) -> Result<Option<Source>, Cancelled> {
     let names: Vec<String> =
         ed.read(|doc| doc.blocks().iter().map(|b| b.name.clone()).collect())?;
     loop {
-        let mut options =
-            Options::new(key!("Enter name of block to add to the library")).keyword("Objects", "O");
+        let mut options = Options::new(prompt).keyword("Objects", "O");
         for name in names.iter().take(20) {
             options = options.keyword(name.clone(), name.clone());
         }
@@ -57,7 +60,7 @@ fn choose_source(ed: &mut Editor) -> Result<Option<Source>, Cancelled> {
 /// so the drawing itself is not touched.
 fn from_objects(ed: &mut Editor, chosen: Vec<EntityId>) -> Result<Option<Source>, Cancelled> {
     if chosen.is_empty() {
-        ed.say("No objects selected; nothing was added.");
+        ed.say("No objects selected.");
         return Ok(None);
     }
     let name = ed.get_string(Options::new(key!("Enter block name")))?;
@@ -115,7 +118,8 @@ fn ask_taken(ed: &Editor, name: &str) -> Result<Option<NameTaken>, Cancelled> {
 /// use. The drawing is not changed.
 pub fn library_add(ed: &mut Editor) -> Result<(), Cancelled> {
     let defaults = ed.defaults();
-    let Some((source, block)) = choose_source(ed)? else {
+    let prompt = key!("Enter name of block to add to the library");
+    let Some((source, block)) = choose_source(ed, prompt)? else {
         return Ok(());
     };
     let default_name = source
