@@ -8,9 +8,11 @@ use crate::Theme;
 
 mod cards;
 mod containers;
+mod dialog_window;
 
 pub use cards::{preset_card, template_card};
 pub use containers::{dialog, group_box, tabbed_page};
+pub use dialog_window::set_dialogs_in_windows;
 
 /// Draw the shared, high-contrast keyboard-focus indicator around a custom
 /// painted control. Native egui widgets draw their own focus state; controls

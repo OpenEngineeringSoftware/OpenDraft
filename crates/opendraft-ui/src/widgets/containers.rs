@@ -2,6 +2,7 @@
 
 use egui::{Align2, CornerRadius, FontId, Margin, Rect, Sense, Stroke, Ui};
 
+use super::dialog_window::{dialog_window, viewport_mode};
 use super::icon_button;
 use crate::{icons::DIALOG_CLOSE, Theme};
 
@@ -19,6 +20,9 @@ pub fn dialog<R>(
     width: f32,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
+    if viewport_mode() {
+        return dialog_window(ctx, theme, title, open, width, add_contents);
+    }
     let c = &theme.colors;
     let radius = theme.radius + 3;
     let frame = egui::Frame::new()
