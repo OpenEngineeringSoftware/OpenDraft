@@ -21,27 +21,33 @@ fn renaming_keeps_the_id_and_the_rest() {
 }
 
 #[test]
-fn renaming_follows_the_block_into_the_blocks_that_hold_it() {
+fn a_block_cannot_be_renamed_to_the_name_of_one_of_its_own_parts() {
     let (_dir, mut lib) = open();
-    let (doc, outer, inner) = drawing_with_nested("bolt", "nut");
-    lib.capture(&doc, outer, &CaptureRequest::default(), NOW)
-        .expect("captures");
-    let nut = lib
-        .package()
-        .entry_for_block(
-            lib.package()
-                .drawing
-                .block_named("nut")
-                .map(|b| b.id)
-                .unwrap_or(inner),
-        )
-        .map(|e| e.uuid)
-        .expect("entry");
-    lib.rename_block(nut, "hex nut").expect("renames");
-    assert_eq!(lib.blocks()[0].components, ["hex nut"]);
-    assert!(lib.package().drawing.validate().is_ok());
-    // And it survives a round trip through the file.
-    assert_eq!(reopen(&lib).blocks()[0].components, ["hex nut"]);
+    let (doc, outer, _) = drawing_with_nested("bolt", "nut");
+    let bolt = lib
+        .capture(&doc, outer, &CaptureRequest::default(), NOW)
+        .expect("captures")
+        .id;
+    assert!(matches!(
+        lib.rename_block(bolt, "nut"),
+        Err(LibraryError::Package(_) | LibraryError::Refused(_))
+    ));
+    assert_eq!(names(&lib.blocks()), ["bolt"]);
+    // Its file is as it was.
+    assert_eq!(lib.block_file(bolt).expect("file").name(), "bolt");
+}
+
+#[test]
+fn the_name_a_block_is_renamed_to_is_in_its_file_too() {
+    let (_dir, mut lib) = open();
+    let id = add(&mut lib, "valve", 1.0);
+    lib.set_description(id, "Gate").expect("describes");
+    lib.set_tags(id, vec!["water".into()]).expect("tags");
+    lib.rename_block(id, "tap").expect("renames");
+    let file = reopen(&lib).block_file(id).expect("file");
+    assert_eq!(file.name(), "tap");
+    assert_eq!(file.definition().expect("def").description, "Gate");
+    assert_eq!(file.tags(), ["water"]);
 }
 
 #[test]
@@ -91,25 +97,6 @@ fn blocks_move_between_folders_and_folders_appear_and_go() {
     // A folder the user made stays even when it holds nothing.
     assert_eq!(lib.folders(), ["Piping", "Piping/Valves"]);
     assert!(lib.move_block(b, "x/../y").is_err());
-}
-
-#[test]
-fn a_part_of_another_block_does_not_move_alone() {
-    let (_dir, mut lib) = open();
-    let (doc, outer, _) = drawing_with_nested("bolt", "nut");
-    lib.capture(&doc, outer, &CaptureRequest::default(), NOW)
-        .expect("captures");
-    let nut = lib
-        .package()
-        .entries
-        .iter()
-        .find(|e| e.component)
-        .map(|e| e.uuid)
-        .expect("nut");
-    assert!(matches!(
-        lib.move_block(nut, "X"),
-        Err(LibraryError::Refused(_))
-    ));
 }
 
 #[test]

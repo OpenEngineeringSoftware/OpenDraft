@@ -26,7 +26,6 @@ use serde_json::{json, Value};
 
 use crate::blocks_payload::{BlockUuid, BlocksPackage, Entry, PayloadError};
 use crate::envelope::strict_json::{self, JsonError};
-use crate::library::store::write_atomic;
 
 pub use dxf::DxfBlock;
 
@@ -214,6 +213,53 @@ impl BlockFile {
         BlockFile::from_package(BlocksPackage { drawing, entries })
     }
 
+    /// The block's own name, as another one. The blocks it nests keep theirs,
+    /// and the new name may not be one of them.
+    pub fn set_name(&mut self, name: &str) -> Result<(), OblockError> {
+        self.redefine(|d| d.name = name.trim().to_owned())
+    }
+
+    pub fn set_description(&mut self, text: &str) -> Result<(), OblockError> {
+        self.redefine(|d| d.description = text.to_owned())
+    }
+
+    /// Replaces the tags, after checking them with the payload's rules.
+    pub fn set_tags(&mut self, tags: Vec<String>) -> Result<(), OblockError> {
+        let mut package = self.package.clone();
+        if let Some(entry) = package.entries.iter_mut().find(|e| !e.component) {
+            entry.tags = tags;
+        }
+        *self = BlockFile::from_package(package)?;
+        Ok(())
+    }
+
+    /// The same block under another stable id.
+    pub(crate) fn with_uuid(mut self, uuid: BlockUuid) -> Result<BlockFile, OblockError> {
+        if let Some(entry) = self.package.entries.iter_mut().find(|e| !e.component) {
+            entry.uuid = uuid;
+        }
+        BlockFile::from_package(self.package)
+    }
+
+    fn redefine(&mut self, change: impl FnOnce(&mut BlockDef)) -> Result<(), OblockError> {
+        let mut def = (*self
+            .package
+            .drawing
+            .block(self.root())
+            .ok_or(OblockError::NoSuchBlock)?
+            .clone())
+        .clone();
+        change(&mut def);
+        let mut package = self.package.clone();
+        let redefinition = package
+            .drawing
+            .redefined_blocks(def)
+            .map_err(|why| OblockError::Refused(why.to_owned()))?;
+        package.drawing.set_blocks(redefinition.blocks);
+        *self = BlockFile::from_package(package)?;
+        Ok(())
+    }
+
     /// Reads a file's bytes: the size cap, then the strict parse, then the
     /// format, then the payload and its rules.
     pub fn read(bytes: &[u8]) -> Result<BlockFile, OblockError> {
@@ -272,6 +318,26 @@ impl BlockFile {
         let bytes = std::fs::read(path).map_err(|e| OblockError::Io(e.to_string()))?;
         BlockFile::read(&bytes)
     }
+}
+
+/// Writes `bytes` to `path` atomically: to a temporary file in the same
+/// folder, then renamed over the old one, so a crash leaves the old file or
+/// the new one and never half of one.
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+    let temp = path.with_file_name(format!("{}.tmp", name.unwrap_or_default()));
+    let result = (|| {
+        let mut file = std::fs::File::create(&temp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&temp, path)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temp);
+    }
+    result
 }
 
 mod dxf;

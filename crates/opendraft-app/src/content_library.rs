@@ -147,7 +147,7 @@ mod tests {
         let dir = tempfile::tempdir().expect("temp dir");
         handle.set_folder(Some(dir.path().join("a")));
         assert_eq!(handle.with(|l| l.blocks().len()).ok(), Some(0));
-        assert!(dir.path().join("a").join("trash").is_dir());
+        assert!(dir.path().join("a").join("library.sqlite").is_file());
         handle.set_folder(Some(dir.path().join("b")));
         assert_eq!(handle.with(|l| l.blocks().len()).ok(), Some(0));
         assert!(dir.path().join("b").is_dir());

@@ -4,10 +4,12 @@
 
 use opendraft_core::{BlockId, Document};
 
-use super::capture::{add_from, NameTaken, Plan};
+use rusqlite::Transaction;
+
+use super::capture::{add_file, NameTaken};
 use super::error::LibraryError;
-use super::{Edit, Library};
-use crate::blocks_payload::BlockUuid;
+use super::Library;
+use crate::oblock::BlockFile;
 
 /// A block of the file that can be imported.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,12 +71,14 @@ impl Library {
         if_name_taken: NameTaken,
         now: u64,
     ) -> Result<ImportReport, LibraryError> {
-        self.edit(|edit| Ok(import_all(edit, source, blocks, folder, if_name_taken, now)))
+        self.edit(true, |tx, _| {
+            Ok(import_all(tx, source, blocks, folder, if_name_taken, now))
+        })
     }
 }
 
 fn import_all(
-    edit: &mut Edit,
+    tx: &Transaction,
     source: &Document,
     blocks: &[BlockId],
     folder: &str,
@@ -82,29 +86,32 @@ fn import_all(
     now: u64,
 ) -> ImportReport {
     let mut report = ImportReport::default();
-    let uuids: Option<&std::collections::HashMap<BlockId, BlockUuid>> = None;
     for id in blocks {
         let name = source
             .block(*id)
             .map_or_else(|| "(missing)".to_owned(), |b| b.name.clone());
-        let plan = Plan {
-            name: None,
-            description: None,
-            tags: &[],
-            folder,
-            if_taken,
-            uuids,
-        };
         // A block that fails halfway leaves nothing behind.
-        let (package, state) = (edit.package.clone(), edit.state.clone());
-        match add_from(edit, source, *id, &plan, now) {
-            Ok(done) => {
+        let added = BlockFile::from_block(source, *id, &[])
+            .map_err(LibraryError::from)
+            .and_then(|(file, warnings)| {
+                tx.execute_batch("SAVEPOINT block")?;
+                match add_file(tx, file, folder, if_taken, now) {
+                    Ok(added) => {
+                        tx.execute_batch("RELEASE block")?;
+                        Ok((added, warnings))
+                    }
+                    Err(error) => {
+                        let _ = tx.execute_batch("ROLLBACK TO block; RELEASE block");
+                        Err(error)
+                    }
+                }
+            });
+        match added {
+            Ok((done, warnings)) => {
                 report.added.push(done.name);
-                report.warnings.extend(done.warnings);
+                report.warnings.extend(warnings);
             }
             Err(error) => {
-                edit.package = package;
-                edit.state = state;
                 let why = match error {
                     LibraryError::NameTaken(_) => "the library has a block of that name".to_owned(),
                     other => other.to_string(),

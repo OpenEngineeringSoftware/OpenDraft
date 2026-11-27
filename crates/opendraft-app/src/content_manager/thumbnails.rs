@@ -80,7 +80,7 @@ impl Thumbnails {
                 .library
                 .with(|lib| {
                     let (doc, block) = lib.source(id)?;
-                    picture_of(doc, block)
+                    picture_of(&doc, block)
                 })
                 .ok()
                 .flatten();
