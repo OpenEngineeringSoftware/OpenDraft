@@ -7,7 +7,9 @@ use opendraft_content::library::BlockInfo;
 use opendraft_ui::Theme;
 
 use super::actions::{Action, Taken};
-use super::snapshot::Snapshot;
+use super::name_edit::{name_line, NameEdit};
+use super::snapshot::{DrawingBlock, Snapshot};
+use super::unit_menu::{unit_text, unit_with_pencil};
 use super::{Editing, Env, Selected, Window};
 
 /// Width of the names beside the fields.
@@ -76,23 +78,12 @@ impl Window {
                     ui.weak("That block is no longer in the library.");
                 }
             },
-            Selected::Drawing(name) => {
-                let known = snap.drawing.iter().find(|b| b.name == name);
-                ui.strong(&name);
-                if let Some(b) = known {
-                    ui.label(format!(
-                        "A block of this drawing, used {} time{}.",
-                        b.references,
-                        if b.references == 1 { "" } else { "s" }
-                    ));
-                    if b.in_library {
-                        ui.weak("The library has a block of this name already.");
-                    }
+            Selected::Drawing(name) => match snap.drawing.iter().find(|b| b.name == name) {
+                Some(block) => self.drawing_details(ui, theme, block, actions),
+                None => {
+                    ui.weak("That block is no longer in the drawing.");
                 }
-                if ui.button("Add to library").clicked() {
-                    actions.push(Action::AddFromDrawing(name, Taken::Cancel));
-                }
-            }
+            },
             Selected::Trashed(id) => {
                 if let Some(item) = snap.trash.iter().find(|t| t.id == id) {
                     ui.strong(&item.name);
@@ -110,6 +101,45 @@ impl Window {
             Selected::Nothing => {
                 ui.weak("Choose a block to see its details. Double-click a block to insert it.");
             }
+        }
+    }
+
+    fn drawing_details(
+        &mut self,
+        ui: &mut egui::Ui,
+        theme: &Theme,
+        block: &DrawingBlock,
+        actions: &mut Vec<Action>,
+    ) {
+        let typing = match &mut self.editing {
+            Some(Editing::RenameDrawingBlock { id, text }) if *id == block.id => Some(text),
+            _ => None,
+        };
+        let mut chosen = None;
+        let unit = |ui: &mut egui::Ui| {
+            let (unit, open) = unit_with_pencil(ui, theme, block.unit);
+            (chosen, self.unit_menu) = (unit, open);
+            ui.weak(extras(block.dynamic, block.has_attributes));
+        };
+        let asked = name_line(ui, theme, &block.name, unit, typing);
+        if let Some(unit) = chosen {
+            actions.push(Action::SetDrawingBlockUnit(block.id, unit));
+        }
+        match asked {
+            NameEdit::Nothing => {}
+            NameEdit::Start => actions.extend(super::drawing::rename(block.id, &block.name)),
+            NameEdit::Accept(name) => actions.push(Action::RenameDrawingBlock(block.id, name)),
+            NameEdit::Cancel => actions.push(Action::Edit(None)),
+        }
+        ui.label(format!(
+            "A block of this drawing, used {}.",
+            crate::text::plural(block.references, "time")
+        ));
+        if block.in_library {
+            ui.weak("The library has a block of this name already.");
+        }
+        if ui.button("Add to library").clicked() {
+            actions.push(Action::AddFromDrawing(block.name.clone(), Taken::Cancel));
         }
     }
 
@@ -165,23 +195,30 @@ impl Window {
         block: &BlockInfo,
         actions: &mut Vec<Action>,
     ) {
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new(&block.name)
-                    .size(theme.font_size_heading)
-                    .color(theme.colors.text),
-            );
-            ui.weak(format!(
-                "{}{}{}",
-                unit_text(block),
-                if block.dynamic { ", dynamic" } else { "" },
-                if block.has_attributes {
-                    ", has attributes"
-                } else {
-                    ""
-                }
-            ));
-        });
+        let typing = match &mut self.editing {
+            Some(Editing::RenameBlock { id, text }) if *id == block.id => Some(text),
+            _ => None,
+        };
+        let line = format!(
+            "{}{}",
+            unit_text(block.unit),
+            match extras(block.dynamic, block.has_attributes) {
+                e if e.is_empty() => e,
+                e => format!(", {e}"),
+            }
+        );
+        let facts = |ui: &mut egui::Ui| {
+            ui.weak(line);
+        };
+        match name_line(ui, theme, &block.name, facts, typing) {
+            NameEdit::Nothing => {}
+            NameEdit::Start => actions.push(Action::Edit(Some(Editing::RenameBlock {
+                id: block.id,
+                text: block.name.clone(),
+            }))),
+            NameEdit::Accept(name) => actions.push(Action::RenameBlock(block.id, name)),
+            NameEdit::Cancel => actions.push(Action::Edit(None)),
+        }
         if !block.components.is_empty() {
             ui.weak(format!("Contains: {}", block.components.join(", ")));
         }
@@ -226,12 +263,6 @@ impl Window {
             if ui.button(star).clicked() {
                 actions.push(Action::Favourite(block.id, !block.favourite));
             }
-            if ui.button("Rename").clicked() {
-                actions.push(Action::Edit(Some(Editing::RenameBlock {
-                    id: block.id,
-                    text: block.name.clone(),
-                })));
-            }
             if ui.button("Delete").clicked() {
                 actions.push(Action::Delete(block.id));
             }
@@ -239,10 +270,12 @@ impl Window {
     }
 }
 
-fn unit_text(block: &BlockInfo) -> String {
-    if block.unit == opendraft_core::InsertUnits::UNITLESS {
-        "unitless".to_owned()
-    } else {
-        block.unit.label().to_owned()
-    }
+/// What is shown after a block's unit: whether it is dynamic or has
+/// attributes.
+fn extras(dynamic: bool, has_attributes: bool) -> String {
+    let words: Vec<&str> = [(dynamic, "dynamic"), (has_attributes, "has attributes")]
+        .into_iter()
+        .filter_map(|(on, word)| on.then_some(word))
+        .collect();
+    words.join(", ")
 }

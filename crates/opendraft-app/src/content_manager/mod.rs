@@ -11,7 +11,7 @@
 
 use eframe::egui;
 use opendraft_content::blocks_payload::BlockUuid;
-use opendraft_core::Document;
+use opendraft_core::{BlockId, Document};
 use opendraft_ui::{icons, Theme};
 
 use crate::content_library::LibraryHandle;
@@ -20,12 +20,15 @@ mod actions;
 mod chrome;
 mod contents;
 mod details;
+mod drawing;
 mod filter;
 mod import;
 mod list;
+mod name_edit;
 mod snapshot;
 mod thumbnails;
 mod tree;
+mod unit_menu;
 
 use actions::Action;
 use snapshot::Snapshot;
@@ -65,16 +68,18 @@ pub enum Selected {
     Trashed(u64),
 }
 
-/// A name being typed.
+/// A name being typed: a new folder's, or a folder's, a library block's or
+/// a block of the open drawing's new name.
 #[derive(Clone, Debug)]
 pub enum Editing {
     NewFolder { parent: String, text: String },
     RenameFolder { path: String, text: String },
     RenameBlock { id: BlockUuid, text: String },
+    RenameDrawingBlock { id: BlockId, text: String },
 }
 
 /// What the window asks of the app, which owns the commands.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
     /// Start LIBINSERT on this block.
     Insert(BlockUuid),
@@ -82,6 +87,12 @@ pub enum Request {
     AddObjects,
     /// Ask for a drawing file and offer its blocks for import.
     PickImport,
+    /// Rename a block of the open drawing (one undo step); the answer comes
+    /// back through [`Window::drawing_block_renamed`].
+    RenameDrawingBlock(BlockId, String),
+    /// Put a block of the open drawing in another unit (one undo step); the
+    /// answer comes back through [`Window::drawing_block_changed`].
+    SetDrawingBlockUnit(BlockId, opendraft_core::InsertUnits),
 }
 
 /// What the window reads of the app.
@@ -110,6 +121,8 @@ pub struct Window {
     details: details::Buffers,
     filter: filter::Filter,
     import: Option<import::ImportDraft>,
+    /// The list of units of a drawing block's details is open.
+    unit_menu: bool,
 }
 
 impl Window {
@@ -117,6 +130,83 @@ impl Window {
     pub fn say(&mut self, text: String) {
         self.status = text;
         self.open = true;
+    }
+
+    /// Takes the app's answer to [`Request::RenameDrawingBlock`]: the old
+    /// name (`None` when it was unchanged) and the drawing's revisions before
+    /// and after. The name bar closes and the block stays chosen under its
+    /// new name, with its picture; or the bar stays open with the reason in
+    /// the status line.
+    pub fn drawing_block_renamed(
+        &mut self,
+        result: Result<Option<String>, String>,
+        name: &str,
+        revisions: (u64, u64),
+    ) {
+        let name = name.trim();
+        match result {
+            Ok(renamed) => {
+                self.editing = None;
+                self.selected = Selected::Drawing(name.to_owned());
+                if let Some(old) = renamed {
+                    self.thumbs.drawing_block_renamed(&old, name, revisions);
+                    self.status = format!("Block \"{old}\" renamed to \"{name}\".");
+                }
+            }
+            Err(why) => self.status = why,
+        }
+    }
+
+    /// Opens the window on This drawing with block `id` being renamed, as
+    /// its pencil does.
+    #[cfg(test)]
+    pub(crate) fn start_drawing_rename(&mut self, id: BlockId, name: &str) {
+        self.open_on(Place::Drawing);
+        self.selected = Selected::Drawing(name.to_owned());
+        self.editing = Some(Editing::RenameDrawingBlock {
+            id,
+            text: name.to_owned(),
+        });
+    }
+
+    /// Whether the window has the keys: a name is being typed (a block's or
+    /// a folder's), or the list of units is open.
+    pub fn typing_a_name(&self) -> bool {
+        self.open && (self.editing.is_some() || self.unit_menu)
+    }
+
+    /// Takes the app's answer to [`Request::SetDrawingBlockUnit`]: what to
+    /// say (`None` when nothing changed) and the drawing's revisions before
+    /// and after. No picture shows a unit, so the pictures are kept.
+    pub fn drawing_block_changed(
+        &mut self,
+        result: Result<Option<String>, String>,
+        revisions: (u64, u64),
+    ) {
+        match result {
+            Ok(Some(said)) => {
+                self.thumbs.drawing_unchanged(revisions);
+                self.status = said;
+            }
+            Ok(None) => {}
+            Err(why) => self.status = why,
+        }
+    }
+
+    /// Opens the window on This drawing with block `name` chosen.
+    #[cfg(test)]
+    pub(crate) fn show_drawing_block(&mut self, name: &str) {
+        self.open_on(Place::Drawing);
+        self.selected = Selected::Drawing(name.to_owned());
+    }
+
+    /// Whether a block's name field is open.
+    #[cfg(test)]
+    pub(crate) fn renaming(&self) -> bool {
+        matches!(
+            self.editing,
+            Some(Editing::RenameBlock { .. } | Editing::RenameDrawingBlock { .. })
+        )
     }
 
     /// Opens the window on `place`.
@@ -141,6 +231,7 @@ impl Window {
             return Vec::new();
         }
         let snapshot = Snapshot::take(self, env);
+        self.unit_menu = false;
         self.thumbs.keep_current(snapshot.stamp, env.revision);
         let mut actions = Vec::new();
         let mut open = true;

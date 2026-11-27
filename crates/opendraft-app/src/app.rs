@@ -334,7 +334,7 @@ impl OpenDraftApp {
 
     fn handle_shortcuts(&mut self, ctx: &egui::Context) {
         // Don't steal keys while the user is typing in a text field.
-        if self.state.mtext_editing()
+        if self.typing_a_name_or_text()
             || !self.state.cmdline.input.is_empty()
             || ctx.wants_keyboard_input()
         {

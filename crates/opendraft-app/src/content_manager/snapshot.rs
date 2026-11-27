@@ -13,6 +13,9 @@ pub struct DrawingBlock {
     pub references: usize,
     /// The library has a block of this name already.
     pub in_library: bool,
+    pub unit: opendraft_core::InsertUnits,
+    pub dynamic: bool,
+    pub has_attributes: bool,
 }
 
 #[derive(Default)]
@@ -135,6 +138,11 @@ impl Snapshot {
                         name: b.name.clone(),
                         references: env.document.block_references(b.id).len(),
                         in_library: names.iter().any(|n| n.eq_ignore_ascii_case(&b.name)),
+                        unit: b.unit,
+                        dynamic: b.is_dynamic(),
+                        has_attributes: b.entities.iter().any(|e| {
+                            matches!(e.entity, opendraft_core::Entity::AttributeDefinition(_))
+                        }),
                     })
                     .collect();
             }

@@ -40,6 +40,28 @@ impl Thumbnails {
         self.made = 0;
     }
 
+    /// Follows a block of the drawing renamed from `from` to `to`, which
+    /// took the drawing from revision `before` to `after`. No picture shows a
+    /// block's name, so every picture still holds: the renamed one is kept
+    /// under its new name instead of all being made again.
+    pub fn drawing_block_renamed(&mut self, from: &str, to: &str, (before, after): (u64, u64)) {
+        if self.drawing_revision != before {
+            return;
+        }
+        if let Some(slot) = self.drawing.remove(from) {
+            self.drawing.insert(to.to_owned(), slot);
+        }
+        self.drawing_revision = after;
+    }
+
+    /// Keeps every picture through a change of the drawing from revision
+    /// `before` to `after` that no picture shows (a block's unit).
+    pub fn drawing_unchanged(&mut self, (before, after): (u64, u64)) {
+        if self.drawing_revision == before {
+            self.drawing_revision = after;
+        }
+    }
+
     /// The picture of a library block. `Err(())` while it has not been made
     /// yet this frame; `Ok(None)` when there is nothing to draw.
     pub fn library_block(
@@ -177,5 +199,35 @@ mod tests {
         let off = small.rgba[0];
         assert_eq!(off, bg[0]);
         assert!(on > 140, "line faded to {on}");
+    }
+
+    fn a_picture(ctx: &egui::Context) -> Slot {
+        let rgba = vec![200; 8 * 8 * 4];
+        let picture = Preview {
+            width: 8,
+            height: 8,
+            rgba,
+        };
+        upload(ctx, "test", Some(picture))
+    }
+
+    #[test]
+    fn renaming_a_drawing_block_keeps_every_picture_instead_of_making_them_again() {
+        let ctx = egui::Context::default();
+        let mut thumbs = Thumbnails::default();
+        thumbs.keep_current(0, 5);
+        thumbs.drawing.insert("Box".into(), a_picture(&ctx));
+        thumbs.drawing.insert("Other".into(), a_picture(&ctx));
+
+        thumbs.drawing_block_renamed("Box", "Crate", (5, 6));
+        thumbs.keep_current(0, 6);
+        let mut kept: Vec<&str> = thumbs.drawing.keys().map(String::as_str).collect();
+        kept.sort_unstable();
+        assert_eq!(kept, ["Crate", "Other"]);
+
+        // Pictures made before another change are let go, as for any change.
+        thumbs.drawing_block_renamed("Crate", "Tile", (5, 7));
+        thumbs.keep_current(0, 7);
+        assert!(thumbs.drawing.is_empty());
     }
 }

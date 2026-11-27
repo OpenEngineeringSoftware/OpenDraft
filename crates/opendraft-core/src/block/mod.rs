@@ -298,6 +298,8 @@ mod dynamic_xy_tests;
 #[cfg(test)]
 mod expansion_tests;
 #[cfg(test)]
+mod rename_tests;
+#[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]
 mod value_set_tests;

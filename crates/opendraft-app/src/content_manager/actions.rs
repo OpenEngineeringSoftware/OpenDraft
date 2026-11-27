@@ -3,6 +3,7 @@
 use opendraft_content::blocks_payload::folder;
 use opendraft_content::blocks_payload::BlockUuid;
 use opendraft_content::library::{CaptureRequest, Library, LibraryError, NameTaken};
+use opendraft_core::BlockId;
 
 use super::{Editing, Env, Place, Request, Selected, Window};
 use crate::content_library::now;
@@ -32,6 +33,10 @@ pub enum Action {
     DropOffer,
     Edit(Option<Editing>),
     RenameBlock(BlockUuid, String),
+    /// Rename a block of the drawing, which the app does.
+    RenameDrawingBlock(BlockId, String),
+    /// Put a block of the drawing in another unit, which the app does.
+    SetDrawingBlockUnit(BlockId, opendraft_core::InsertUnits),
     SetDescription(BlockUuid, String),
     SetTags(BlockUuid, Vec<String>),
     Move(BlockUuid, String),
@@ -71,10 +76,26 @@ impl Window {
                         self.go(Place::Mine(up));
                     }
                 }
-                Action::Select(selected) => self.selected = selected,
+                Action::Select(selected) => {
+                    // A block's name field belongs to the block it was opened on.
+                    let renaming = matches!(
+                        self.editing,
+                        Some(Editing::RenameBlock { .. } | Editing::RenameDrawingBlock { .. })
+                    );
+                    if renaming && selected != self.selected {
+                        self.editing = None;
+                    }
+                    self.selected = selected;
+                }
                 Action::Insert(id) => requests.push(Request::Insert(id)),
                 Action::AddObjects => requests.push(Request::AddObjects),
                 Action::ImportFile => requests.push(Request::PickImport),
+                Action::RenameDrawingBlock(id, name) => {
+                    requests.push(Request::RenameDrawingBlock(id, name))
+                }
+                Action::SetDrawingBlockUnit(id, unit) => {
+                    requests.push(Request::SetDrawingBlockUnit(id, unit))
+                }
                 Action::RunImport => self.run_import(env),
                 Action::CancelImport => self.import = None,
                 Action::DropOffer => self.taken = None,
