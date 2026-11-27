@@ -44,6 +44,7 @@ impl OpenDraftApp {
                     defaults.library.queue_pick(id);
                     self.state.start_command("LIBINSERT", library_insert);
                 }
+                Request::InsertDrawingBlock(name) => self.state.insert_drawing_block(&name),
                 Request::AddObjects => self.state.start_command("LIBADD", library_add),
                 Request::PickImport => self.state.pick_blocks_to_import(),
                 Request::RenameDrawingBlock(id, name) => {

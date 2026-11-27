@@ -24,6 +24,8 @@ pub enum Action {
     Up,
     Select(Selected),
     Insert(BlockUuid),
+    /// Insert a block of the open drawing, by name (INSERT).
+    InsertDrawing(String),
     /// Run LIBADD in the command line.
     AddObjects,
     ImportFile,
@@ -88,6 +90,7 @@ impl Window {
                     self.selected = selected;
                 }
                 Action::Insert(id) => requests.push(Request::Insert(id)),
+                Action::InsertDrawing(name) => requests.push(Request::InsertDrawingBlock(name)),
                 Action::AddObjects => requests.push(Request::AddObjects),
                 Action::ImportFile => requests.push(Request::PickImport),
                 Action::RenameDrawingBlock(id, name) => {

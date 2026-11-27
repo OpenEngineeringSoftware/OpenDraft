@@ -219,7 +219,8 @@ fn a_taken_name_is_added_as_new_by_default_and_the_drawings_block_is_left_alone(
     other.settle_command();
     submit_all(&mut other, &["Box"]);
     assert!(other.cmd_prompt().text.contains("already has"));
-    submit_all(&mut other, &["", "0,0"]);
+    // New, not kept for the session, then the point.
+    submit_all(&mut other, &["", "", "0,0"]);
     assert!(!other.command_running());
     assert_eq!(block_names(&other), ["Box", "Box_2"]);
     let doc = other.session().document();
@@ -243,7 +244,7 @@ fn replace_changes_the_definition_every_reference_follows_and_undo_restores_it()
     submit_all(&mut other, &["Box"]);
     other.answer_keyword("Replace");
     other.settle_command();
-    submit_all(&mut other, &["0,0"]);
+    submit_all(&mut other, &["", "0,0"]);
     assert!(!other.command_running());
     assert!(said(&other, "definition was replaced"));
     assert_eq!(block_names(&other), ["Box"]);
@@ -288,4 +289,86 @@ fn an_unknown_name_is_asked_again() {
     submit_all(&mut other, &["Nothing"]);
     assert!(other.command_running());
     assert!(said(&other, "\"Nothing\" is not in the library"));
+}
+
+#[test]
+fn a_block_the_drawing_has_that_is_the_same_is_used_without_asking() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    stocked(dir.path(), 2.0);
+
+    // Another drawing has the same "Box".
+    let mut other = drawing_with_box(dir.path(), 2.0);
+    other.start_command("LIBINSERT", library_insert);
+    other.settle_command();
+    submit_all(&mut other, &["Box"]);
+    assert!(
+        !other.cmd_prompt().text.contains("already has"),
+        "asked about {:?}",
+        other.cmd_prompt().text
+    );
+    submit_all(&mut other, &["0,0"]);
+    assert!(!other.command_running());
+    assert_eq!(block_names(&other), ["Box"], "the drawing's own is used");
+    assert_eq!(other.session().document().len(), 2);
+}
+
+#[test]
+fn a_different_block_is_still_asked_about_and_the_answer_can_be_kept_for_the_session() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    stocked(dir.path(), 2.0);
+
+    let mut other = drawing_with_box(dir.path(), 9.0);
+    other.start_command("LIBINSERT", library_insert);
+    other.settle_command();
+    submit_all(&mut other, &["Box"]);
+    assert!(other.cmd_prompt().text.contains("already has"));
+    // New, kept for the session.
+    submit_all(&mut other, &["", "Yes", "0,0"]);
+    assert!(!other.command_running());
+    assert_eq!(block_names(&other), ["Box", "Box_2"]);
+    assert!(said(&other, "kept until OpenDraft is closed"));
+
+    // The next one is not asked about.
+    other.start_command("LIBINSERT", library_insert);
+    other.settle_command();
+    submit_all(&mut other, &["Box"]);
+    assert!(
+        !other.cmd_prompt().text.contains("already has"),
+        "asked again: {:?}",
+        other.cmd_prompt().text
+    );
+    submit_all(&mut other, &["5,5"]);
+    assert!(!other.command_running());
+    assert_eq!(other.session().document().validate(), Ok(()));
+}
+
+#[test]
+fn a_block_of_the_drawing_is_inserted_by_name_without_asking_for_it() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let mut state = drawing_with_box(dir.path(), 2.0);
+    let before = state.session().document().len();
+    state.insert_drawing_block("Box");
+    state.settle_command();
+    assert!(state.command_running());
+    assert!(
+        state.cmd_prompt().text.contains("insertion point"),
+        "{:?}",
+        state.cmd_prompt().text
+    );
+    submit_all(&mut state, &["30,30"]);
+    assert!(!state.command_running());
+    assert_eq!(state.session().document().len(), before + 1);
+    assert_eq!(block_names(&state), ["Box"]);
+    // Nothing went to the library.
+    assert!(library_names(&state).is_empty());
+}
+
+#[test]
+fn inserting_a_block_the_drawing_has_lost_says_so() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let mut state = drawing_with_box(dir.path(), 2.0);
+    state.insert_drawing_block("Gone");
+    state.settle_command();
+    assert!(!state.command_running());
+    assert!(said(&state, "\"Gone\" not found"));
 }

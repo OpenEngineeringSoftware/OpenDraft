@@ -394,3 +394,14 @@ fn a_block_is_renamed_in_its_details_and_choosing_another_closes_the_field() {
     apply(&mut win, &state, vec![Action::Select(Selected::Nothing)]);
     assert!(win.editing.is_none());
 }
+
+#[test]
+fn inserting_a_block_of_the_drawing_asks_the_app_and_adds_nothing_to_the_library() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (state, mut win) = setup(dir.path());
+    let before = names(&state);
+    let requests = apply(&mut win, &state, vec![Action::InsertDrawing("Box".into())]);
+    assert_eq!(requests, vec![Request::InsertDrawingBlock("Box".into())]);
+    assert_eq!(names(&state), before);
+    assert!(win.taken.is_none());
+}

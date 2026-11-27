@@ -8,6 +8,10 @@ use super::{Editing, Selected};
 
 /// The right-click menu of a block of the drawing.
 pub(super) fn drawing_menu(ui: &mut egui::Ui, id: BlockId, name: &str, actions: &mut Vec<Action>) {
+    if ui.button("Insert").clicked() {
+        actions.push(Action::InsertDrawing(name.to_owned()));
+        ui.close_menu();
+    }
     if ui.button("Add to library").clicked() {
         actions.push(Action::AddFromDrawing(name.to_owned(), Taken::Cancel));
         ui.close_menu();

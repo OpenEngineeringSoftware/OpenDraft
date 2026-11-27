@@ -83,6 +83,8 @@ pub enum Editing {
 pub enum Request {
     /// Start LIBINSERT on this block.
     Insert(BlockUuid),
+    /// Start INSERT on this block of the open drawing, by name.
+    InsertDrawingBlock(String),
     /// Start LIBADD (on the selected objects, if any).
     AddObjects,
     /// Ask for a drawing file and offer its blocks for import.

@@ -138,9 +138,14 @@ impl Window {
         if block.in_library {
             ui.weak("The library has a block of this name already.");
         }
-        if ui.button("Add to library").clicked() {
-            actions.push(Action::AddFromDrawing(block.name.clone(), Taken::Cancel));
-        }
+        ui.horizontal(|ui| {
+            if ui.button("Insert").clicked() {
+                actions.push(Action::InsertDrawing(block.name.clone()));
+            }
+            if ui.button("Add to library").clicked() {
+                actions.push(Action::AddFromDrawing(block.name.clone(), Taken::Cancel));
+            }
+        });
     }
 
     fn block_details(

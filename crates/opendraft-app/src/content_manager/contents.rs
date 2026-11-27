@@ -6,7 +6,7 @@ use opendraft_content::blocks_payload::folder;
 use opendraft_content::library::BlockInfo;
 use opendraft_ui::{icons, Theme};
 
-use super::actions::{Action, Taken};
+use super::actions::Action;
 use super::drawing::drawing_menu;
 use super::list::{empty_state, list_header, list_row, list_widths};
 use super::snapshot::Snapshot;
@@ -300,7 +300,7 @@ impl Window {
                 }
                 let name = block.name.clone();
                 if response.double_clicked() {
-                    actions.push(Action::AddFromDrawing(name.clone(), Taken::Cancel));
+                    actions.push(Action::InsertDrawing(name.clone()));
                 }
                 response.context_menu(|ui| drawing_menu(ui, block.id, &name, actions));
             }
