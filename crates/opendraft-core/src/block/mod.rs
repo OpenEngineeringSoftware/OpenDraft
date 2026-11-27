@@ -43,6 +43,7 @@ mod field_eval;
 pub mod field_kinds;
 mod materialize;
 mod picture;
+mod same;
 mod table;
 
 use std::sync::Arc;

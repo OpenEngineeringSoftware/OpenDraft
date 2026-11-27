@@ -102,6 +102,33 @@ pub fn insert_block(ed: &mut Editor) -> Result<(), Cancelled> {
     let Some(block) = choose_block(ed)? else {
         return Ok(());
     };
+    place_block(ed, block)
+}
+
+impl crate::state::AppState {
+    /// INSERT on the drawing's block called `name`, which is not asked for:
+    /// the insertion point is the first prompt. For the Content Manager.
+    pub fn insert_drawing_block(&mut self, name: &str) {
+        let name = name.to_owned();
+        self.start_command("INSERT", move |ed| {
+            let lookup = name.clone();
+            match ed.read(move |doc| doc.block_named(&lookup).cloned())? {
+                Some(block) => place_block(ed, block),
+                None => {
+                    ed.say(Wording::new(
+                        key!("Block \"%{name}\" not found."),
+                        &[("name", &name)],
+                    ));
+                    Ok(())
+                }
+            }
+        });
+    }
+}
+
+/// The rest of INSERT, once the block is known: where, at what scale and
+/// turn, its attribute values, and the reference.
+fn place_block(ed: &mut Editor, block: Arc<BlockDef>) -> Result<(), Cancelled> {
     let from = block.unit;
     let units = ed.read(move |doc| InsertUnits::ratio(from, doc.units().insert))?;
     let mut scale = (1.0, 1.0);

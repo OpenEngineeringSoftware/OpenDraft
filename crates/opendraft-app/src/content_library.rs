@@ -18,6 +18,9 @@ struct Inner {
     generation: u32,
     /// A block the window has chosen for the next LIBINSERT.
     pick: Option<opendraft_content::blocks_payload::BlockUuid>,
+    /// How LIBINSERT settles a block the drawing has under another
+    /// definition, once the user said to keep that answer for the session.
+    clash: Option<opendraft_core::BlockClash>,
 }
 
 #[derive(Default)]
@@ -51,6 +54,16 @@ impl LibraryHandle {
     /// The next LIBINSERT places this block without asking for a name.
     pub fn queue_pick(&self, id: opendraft_content::blocks_payload::BlockUuid) {
         self.lock().pick = Some(id);
+    }
+
+    /// The answer kept for this session, if the user chose to keep one.
+    pub fn remembered_clash(&self) -> Option<opendraft_core::BlockClash> {
+        self.lock().clash
+    }
+
+    /// Keeps `how` for the rest of this session (`None` forgets it).
+    pub fn remember_clash(&self, how: Option<opendraft_core::BlockClash>) {
+        self.lock().clash = how;
     }
 
     pub fn take_pick(&self) -> Option<opendraft_content::blocks_payload::BlockUuid> {

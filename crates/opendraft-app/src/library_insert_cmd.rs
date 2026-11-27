@@ -61,15 +61,22 @@ fn choose(
     }
 }
 
-/// What to do with the blocks the drawing already has under these names:
-/// one answer for all of them. `Rename` is the default, so a drawing's own
-/// block is never changed unless the user says so.
+/// What to do with the blocks the drawing already has under these names, which
+/// differ from the library's: one answer for all of them, or the one the user
+/// asked to keep for this session. `Rename` is the default, so a drawing's
+/// own block is never changed unless the user says so. A block the drawing has
+/// that is the same as the library's is never asked about: see
+/// [`settle_all`].
 fn settle_clashes(
     ed: &Editor,
     clashes: &[BlockNameClash],
 ) -> Result<HashMap<BlockId, BlockClash>, Cancelled> {
     if clashes.is_empty() {
         return Ok(HashMap::new());
+    }
+    let defaults = ed.defaults();
+    if let Some(how) = defaults.library.remembered_clash() {
+        return Ok(clashes.iter().map(|c| (c.source, how)).collect());
     }
     let names = clashes
         .iter()
@@ -89,7 +96,40 @@ fn settle_clashes(
         "Replace" => BlockClash::Replace,
         _ => BlockClash::Rename,
     };
+    let keep = Options::<String>::new(key!("Use this answer for the rest of this session?"))
+        .keyword("Yes", "Y")
+        .keyword("No", "N")
+        .default("No".to_owned());
+    if ed.ask_keyword(keep)?.as_deref() == Some("Yes") {
+        defaults.library.remember_clash(Some(how));
+        ed.say(key!("That answer is kept until OpenDraft is closed."));
+    }
     Ok(clashes.iter().map(|c| (c.source, how)).collect())
+}
+
+/// How every block of the source that the drawing already has is settled:
+/// the ones that are the same (objects, base point and unit) use the drawing's
+/// without asking, and the others are asked about.
+fn settle_all(
+    ed: &Editor,
+    source: &Document,
+    clashes: Vec<BlockNameClash>,
+) -> Result<HashMap<BlockId, BlockClash>, Cancelled> {
+    let source = source.clone();
+    let (same, different): (Vec<_>, Vec<_>) = ed.read(move |doc| {
+        clashes
+            .into_iter()
+            .partition(|c| match (source.block(c.source), doc.block(c.existing)) {
+                (Some(mine), Some(theirs)) => mine.same_as(&source, theirs, doc),
+                _ => false,
+            })
+    })?;
+    let mut choices: HashMap<BlockId, BlockClash> = same
+        .iter()
+        .map(|c| (c.source, BlockClash::UseExisting))
+        .collect();
+    choices.extend(settle_clashes(ed, &different)?);
+    Ok(choices)
 }
 
 /// LIBINSERT: a library block name, then the insertion point, as INSERT. A
@@ -140,7 +180,7 @@ pub fn library_insert(ed: &mut Editor) -> Result<(), Cancelled> {
         let source = source.clone();
         ed.read(move |doc| doc.block_clashes(&source, root).unwrap_or_default())?
     };
-    let choices = settle_clashes(ed, &clashes)?;
+    let choices = settle_all(ed, &source, clashes)?;
 
     let from = def.unit;
     let units = ed.read(move |doc| InsertUnits::ratio(from, doc.units().insert))?;
