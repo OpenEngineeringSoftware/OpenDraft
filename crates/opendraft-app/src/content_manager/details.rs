@@ -9,6 +9,7 @@ use opendraft_ui::Theme;
 use super::actions::{Action, Taken};
 use super::name_edit::{name_line, NameEdit};
 use super::snapshot::{DrawingBlock, Snapshot};
+use super::unit_menu::{unit_text, unit_with_pencil};
 use super::{Editing, Env, Selected, Window};
 
 /// Width of the names beside the fields.
@@ -114,8 +115,17 @@ impl Window {
             Some(Editing::RenameDrawingBlock { id, text }) if *id == block.id => Some(text),
             _ => None,
         };
-        let line = facts(block.unit, block.dynamic, block.has_attributes);
-        match name_line(ui, theme, &block.name, &line, typing) {
+        let mut chosen = None;
+        let unit = |ui: &mut egui::Ui| {
+            let (unit, open) = unit_with_pencil(ui, theme, block.unit);
+            (chosen, self.unit_menu) = (unit, open);
+            ui.weak(extras(block.dynamic, block.has_attributes));
+        };
+        let asked = name_line(ui, theme, &block.name, unit, typing);
+        if let Some(unit) = chosen {
+            actions.push(Action::SetDrawingBlockUnit(block.id, unit));
+        }
+        match asked {
             NameEdit::Nothing => {}
             NameEdit::Start => actions.extend(super::drawing::rename(block.id, &block.name)),
             NameEdit::Accept(name) => actions.push(Action::RenameDrawingBlock(block.id, name)),
@@ -189,8 +199,18 @@ impl Window {
             Some(Editing::RenameBlock { id, text }) if *id == block.id => Some(text),
             _ => None,
         };
-        let line = facts(block.unit, block.dynamic, block.has_attributes);
-        match name_line(ui, theme, &block.name, &line, typing) {
+        let line = format!(
+            "{}{}",
+            unit_text(block.unit),
+            match extras(block.dynamic, block.has_attributes) {
+                e if e.is_empty() => e,
+                e => format!(", {e}"),
+            }
+        );
+        let facts = |ui: &mut egui::Ui| {
+            ui.weak(line);
+        };
+        match name_line(ui, theme, &block.name, facts, typing) {
             NameEdit::Nothing => {}
             NameEdit::Start => actions.push(Action::Edit(Some(Editing::RenameBlock {
                 id: block.id,
@@ -250,21 +270,12 @@ impl Window {
     }
 }
 
-/// What is shown beside a block's name: its unit, and whether it is dynamic
-/// or has attributes.
-fn facts(unit: opendraft_core::InsertUnits, dynamic: bool, has_attributes: bool) -> String {
-    let unit = if unit == opendraft_core::InsertUnits::UNITLESS {
-        "unitless"
-    } else {
-        unit.label()
-    };
-    format!(
-        "{unit}{}{}",
-        if dynamic { ", dynamic" } else { "" },
-        if has_attributes {
-            ", has attributes"
-        } else {
-            ""
-        }
-    )
+/// What is shown after a block's unit: whether it is dynamic or has
+/// attributes.
+fn extras(dynamic: bool, has_attributes: bool) -> String {
+    let words: Vec<&str> = [(dynamic, "dynamic"), (has_attributes, "has attributes")]
+        .into_iter()
+        .filter_map(|(on, word)| on.then_some(word))
+        .collect();
+    words.join(", ")
 }

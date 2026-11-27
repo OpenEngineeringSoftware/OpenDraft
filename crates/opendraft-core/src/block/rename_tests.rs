@@ -1,5 +1,6 @@
-//! Renaming a block of the drawing: only the definition's name changes, and
-//! every insert follows, in the drawing and inside other blocks.
+//! Renaming a block of the drawing or changing its unit: only the
+//! definition changes, and every insert follows, in the drawing and inside
+//! other blocks.
 
 use super::tests::{near, nested_doc, p};
 use super::*;
@@ -91,4 +92,31 @@ fn renaming_keeps_attribute_values_and_dynamic_state() {
     assert_eq!(after.rotation, 0.5);
     assert_eq!(after.attributes, insert.attributes);
     assert_eq!(after.dynamic, insert.dynamic);
+}
+
+#[test]
+fn a_block_put_in_another_unit_keeps_its_inserts_as_they_are() {
+    let (mut doc, inner, outer) = nested_doc();
+    let mut insert = Insert::new(inner.clone(), p(0.0, 0.0));
+    insert.scale_x = 2.0;
+    let id = doc.add(Entity::Insert(Box::new(insert)));
+    let mm = crate::InsertUnits::from_code(4).expect("millimetres");
+    let change = doc.block_in_unit(inner.id, mm).expect("a known block");
+    applied(&mut doc, change);
+    assert_eq!(doc.validate(), Ok(()));
+    assert_eq!(doc.block(inner.id).map(|b| b.unit), Some(mm));
+    assert_eq!(insert_of(&doc, id).block.unit, mm);
+    assert_eq!(
+        insert_of(&doc, id).scale_x,
+        2.0,
+        "placed blocks keep their size"
+    );
+    let nested = doc
+        .block(outer.id)
+        .and_then(|b| match &b.entities[0].entity {
+            Entity::Insert(i) => Some(i.block.unit),
+            _ => None,
+        });
+    assert_eq!(nested, Some(mm), "the outer block holds the new record");
+    assert!(doc.block_in_unit(BlockId(999), mm).is_err());
 }

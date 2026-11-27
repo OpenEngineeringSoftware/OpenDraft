@@ -99,3 +99,37 @@ fn a_renamed_block_survives_saving_to_dxf_and_reopening() {
         .collect();
     assert!(names.len() >= 2 && names.iter().all(|&n| n == "Crate"));
 }
+
+#[test]
+fn a_block_put_in_another_unit_is_one_undo_step_and_survives_dxf() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (mut state, id) = two_boxes(dir.path());
+    let mm = opendraft_core::InsertUnits::from_code(4).expect("millimetres");
+    let scales = |state: &AppState| -> Vec<f64> {
+        let objects = state.session().document().objects();
+        objects
+            .iter()
+            .filter_map(|o| match &o.entity {
+                Entity::Insert(i) => Some(i.scale_x),
+                _ => None,
+            })
+            .collect()
+    };
+    let before = scales(&state);
+    let said = state.set_block_unit(id, mm).expect("changed");
+    assert_eq!(
+        said.as_deref(),
+        Some("\"Box\" is now in millimeters; the blocks already placed keep their size.")
+    );
+    assert_eq!(scales(&state), before, "placed blocks keep their size");
+    assert_eq!(state.set_block_unit(id, mm), Ok(None), "unchanged");
+
+    let path = dir.path().join("unit.dxf");
+    opendraft_files::save(&path, state.session().document()).expect("saves");
+    let back = opendraft_files::load(&path).expect("opens").document;
+    assert_eq!(back.block_named("Box").map(|b| b.unit), Some(mm));
+
+    assert_eq!(state.undo().as_deref(), Some("Block unit"));
+    let unit = state.session().document().block(id).map(|b| b.unit);
+    assert_ne!(unit, Some(mm));
+}

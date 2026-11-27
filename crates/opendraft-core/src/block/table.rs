@@ -145,6 +145,23 @@ impl Document {
         self.redefined_blocks(def).map_err(str::to_owned)
     }
 
+    /// The table with block `id` in `unit`, and every insert of it pointing
+    /// at the new record. The unit only scales a block when it is inserted
+    /// (see [`crate::InsertUnits::ratio`]), so the inserts already placed
+    /// keep their size, as in AutoCAD.
+    pub fn block_in_unit(
+        &self,
+        id: BlockId,
+        unit: crate::InsertUnits,
+    ) -> Result<Redefinition, String> {
+        let Some(old) = self.block(id) else {
+            return Err("That block is no longer in the drawing.".to_owned());
+        };
+        let mut def = (**old).clone();
+        def.unit = unit;
+        self.redefined_blocks(def).map_err(str::to_owned)
+    }
+
     /// `def` rebuilt so that every insert of `target` inside it, at any
     /// depth, uses the record in `done`.
     fn repointed(

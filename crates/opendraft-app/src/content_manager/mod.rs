@@ -28,6 +28,7 @@ mod name_edit;
 mod snapshot;
 mod thumbnails;
 mod tree;
+mod unit_menu;
 
 use actions::Action;
 use snapshot::Snapshot;
@@ -89,6 +90,9 @@ pub enum Request {
     /// Rename a block of the open drawing (one undo step); the answer comes
     /// back through [`Window::drawing_block_renamed`].
     RenameDrawingBlock(BlockId, String),
+    /// Put a block of the open drawing in another unit (one undo step); the
+    /// answer comes back through [`Window::drawing_block_changed`].
+    SetDrawingBlockUnit(BlockId, opendraft_core::InsertUnits),
 }
 
 /// What the window reads of the app.
@@ -117,6 +121,8 @@ pub struct Window {
     details: details::Buffers,
     filter: filter::Filter,
     import: Option<import::ImportDraft>,
+    /// The list of units of a drawing block's details is open.
+    unit_menu: bool,
 }
 
 impl Window {
@@ -163,9 +169,35 @@ impl Window {
         });
     }
 
-    /// Whether a name is being typed in the window (a block's or a folder's).
+    /// Whether the window has the keys: a name is being typed (a block's or
+    /// a folder's), or the list of units is open.
     pub fn typing_a_name(&self) -> bool {
-        self.open && self.editing.is_some()
+        self.open && (self.editing.is_some() || self.unit_menu)
+    }
+
+    /// Takes the app's answer to [`Request::SetDrawingBlockUnit`]: what to
+    /// say (`None` when nothing changed) and the drawing's revisions before
+    /// and after. No picture shows a unit, so the pictures are kept.
+    pub fn drawing_block_changed(
+        &mut self,
+        result: Result<Option<String>, String>,
+        revisions: (u64, u64),
+    ) {
+        match result {
+            Ok(Some(said)) => {
+                self.thumbs.drawing_unchanged(revisions);
+                self.status = said;
+            }
+            Ok(None) => {}
+            Err(why) => self.status = why,
+        }
+    }
+
+    /// Opens the window on This drawing with block `name` chosen.
+    #[cfg(test)]
+    pub(crate) fn show_drawing_block(&mut self, name: &str) {
+        self.open_on(Place::Drawing);
+        self.selected = Selected::Drawing(name.to_owned());
     }
 
     /// Whether a block's name field is open.
@@ -199,6 +231,7 @@ impl Window {
             return Vec::new();
         }
         let snapshot = Snapshot::take(self, env);
+        self.unit_menu = false;
         self.thumbs.keep_current(snapshot.stamp, env.revision);
         let mut actions = Vec::new();
         let mut open = true;

@@ -17,13 +17,14 @@ pub(super) enum NameEdit {
     Cancel,
 }
 
-/// The name as a heading, then the pencil and `facts` (unit, dynamic...);
-/// or, while `typing` holds the name being typed, a field in its place.
+/// The name as a heading, then the pencil and what `facts` draws (unit,
+/// dynamic...); or, while `typing` holds the name being typed, a field in
+/// its place.
 pub(super) fn name_line(
     ui: &mut egui::Ui,
     theme: &Theme,
     name: &str,
-    facts: &str,
+    facts: impl FnOnce(&mut egui::Ui),
     typing: Option<&mut String>,
 ) -> NameEdit {
     let mut asked = NameEdit::Nothing;
@@ -37,7 +38,7 @@ pub(super) fn name_line(
             if icon_button(ui, theme, icons::CONTENT_RENAME, false, true, "Rename").clicked() {
                 asked = NameEdit::Start;
             }
-            ui.weak(facts);
+            facts(ui);
             return;
         };
         // Read before the field: on Enter it gives up the focus it is given

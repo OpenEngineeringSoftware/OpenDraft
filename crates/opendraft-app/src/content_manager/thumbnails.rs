@@ -54,6 +54,14 @@ impl Thumbnails {
         self.drawing_revision = after;
     }
 
+    /// Keeps every picture through a change of the drawing from revision
+    /// `before` to `after` that no picture shows (a block's unit).
+    pub fn drawing_unchanged(&mut self, (before, after): (u64, u64)) {
+        if self.drawing_revision == before {
+            self.drawing_revision = after;
+        }
+    }
+
     /// The picture of a library block. `Err(())` while it has not been made
     /// yet this frame; `Ok(None)` when there is nothing to draw.
     pub fn library_block(

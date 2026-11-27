@@ -35,6 +35,8 @@ pub enum Action {
     RenameBlock(BlockUuid, String),
     /// Rename a block of the drawing, which the app does.
     RenameDrawingBlock(BlockId, String),
+    /// Put a block of the drawing in another unit, which the app does.
+    SetDrawingBlockUnit(BlockId, opendraft_core::InsertUnits),
     SetDescription(BlockUuid, String),
     SetTags(BlockUuid, Vec<String>),
     Move(BlockUuid, String),
@@ -90,6 +92,9 @@ impl Window {
                 Action::ImportFile => requests.push(Request::PickImport),
                 Action::RenameDrawingBlock(id, name) => {
                     requests.push(Request::RenameDrawingBlock(id, name))
+                }
+                Action::SetDrawingBlockUnit(id, unit) => {
+                    requests.push(Request::SetDrawingBlockUnit(id, unit))
                 }
                 Action::RunImport => self.run_import(env),
                 Action::CancelImport => self.import = None,

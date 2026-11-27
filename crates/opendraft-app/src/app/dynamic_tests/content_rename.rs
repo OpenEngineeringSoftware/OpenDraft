@@ -83,3 +83,32 @@ fn escape_leaves_the_name_as_it_was() {
     assert!(!app.state.command_dialogs.content.renaming());
     assert_eq!(block_names(&app), ["Box"]);
 }
+
+#[test]
+fn escape_closes_the_list_of_units_without_cancelling_in_the_drawing() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (mut app, ctx) = renaming(dir.path());
+    let window = &mut app.state.command_dialogs.content;
+    window.show_drawing_block("Box");
+    let list = egui::Id::new("content_manager_unit_menu");
+    ctx.memory_mut(|m| m.open_popup(list));
+    frame_with_windows(&mut app, &ctx, Vec::new(), 0.04);
+    assert!(
+        app.state.command_dialogs.content.typing_a_name(),
+        "the list has the keys"
+    );
+    let selected = app.state.docs[0].selection.len();
+    assert!(selected > 0);
+    frame_with_windows(&mut app, &ctx, key(Key::Escape), 0.06);
+    frame_with_windows(&mut app, &ctx, Vec::new(), 0.08);
+    assert!(
+        !ctx.memory(|m| m.is_popup_open(list)),
+        "Escape closed the list"
+    );
+    assert_eq!(
+        app.state.docs[0].selection.len(),
+        selected,
+        "nothing cancelled"
+    );
+    assert!(!app.state.command_dialogs.content.typing_a_name());
+}
