@@ -47,6 +47,7 @@ fn app() -> OpenDraftApp {
         ribbon_state: Default::default(),
         dock: dock::default_layout(),
         places: Default::default(),
+        detached: Default::default(),
         window_title: String::new(),
         last_autosave: std::time::Instant::now(),
         io_waker_set: false,

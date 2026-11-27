@@ -240,6 +240,37 @@ pub fn apply(dock: &mut DockState<PanelTab>, places: &mut Places, request: Layou
     }
 }
 
+/// The panels in the dock's own floating windows, with each window's inside
+/// in the main window's coordinates when egui knows it.
+pub fn floating(
+    dock: &DockState<PanelTab>,
+    ctx: &egui::Context,
+) -> Vec<(PanelTab, Option<egui::Rect>)> {
+    dock.iter_all_tabs()
+        .filter(|((surface, _), tab)| {
+            *surface != egui_dock::SurfaceIndex::main() && tab.closeable()
+        })
+        .map(|((surface, _), tab)| (*tab, places::window_rect(ctx, surface)))
+        .collect()
+}
+
+/// Show a hidden panel docked in the main area, where it was or where the
+/// default layout keeps it, never in a floating window.
+pub fn dock_back(dock: &mut DockState<PanelTab>, places: &mut Places, panel: PanelTab) {
+    if dock.find_tab(&panel).is_some() {
+        return;
+    }
+    if places.restore(dock, panel) {
+        match dock.find_tab(&panel) {
+            Some(found) if found.0 != egui_dock::SurfaceIndex::main() => {
+                dock.remove_tab(found);
+            }
+            _ => return,
+        }
+    }
+    restore(dock, panel);
+}
+
 /// Move a panel docked in the main area to a window just above its place.
 fn float(dock: &mut DockState<PanelTab>, panel: PanelTab) {
     let Some(found) = dock.find_tab(&panel) else {
@@ -423,6 +454,26 @@ mod tests {
         assert_eq!(style.tab_bar.bg_fill, theme.colors.tab_strip());
         assert_eq!(style.tab.inactive.bg_fill, theme.colors.tab_strip());
         assert_eq!(style.tab.active.bg_fill, theme.colors.sidebar_bg);
+    }
+
+    #[test]
+    fn a_panel_docked_back_leaves_no_floating_window_behind() {
+        let mut dock = default_layout();
+        let mut places = Places::default();
+        apply(
+            &mut dock,
+            &mut places,
+            LayoutRequest::Float(PanelTab::Layers),
+        );
+        assert!(dock
+            .find_tab(&PanelTab::Layers)
+            .is_some_and(|f| f.0 != egui_dock::SurfaceIndex::main()));
+        let found = dock.find_tab(&PanelTab::Layers).unwrap();
+        dock.remove_tab(found);
+        dock_back(&mut dock, &mut places, PanelTab::Layers);
+        let found = dock.find_tab(&PanelTab::Layers).unwrap();
+        assert_eq!(found.0, egui_dock::SurfaceIndex::main());
+        assert!(is_valid(&dock));
     }
 
     #[test]
