@@ -23,6 +23,9 @@ pub enum LibraryError {
     /// The drawing's rules refused it (a block that holds itself, say).
     Refused(String),
     Package(String),
+    /// The file is a library of another version, or not a library: it is
+    /// left exactly as it is.
+    Unsupported(String),
 }
 
 impl fmt::Display for LibraryError {
@@ -32,7 +35,10 @@ impl fmt::Display for LibraryError {
             LibraryError::Corrupt(m) => write!(f, "The library is damaged: {m}"),
             LibraryError::NotFound => write!(f, "That is no longer in the library."),
             LibraryError::NameTaken(n) => write!(f, "The library already has a block called {n}."),
-            LibraryError::InvalidName(m) | LibraryError::Refused(m) | LibraryError::Package(m) => {
+            LibraryError::InvalidName(m)
+            | LibraryError::Refused(m)
+            | LibraryError::Package(m)
+            | LibraryError::Unsupported(m) => {
                 write!(f, "{m}")
             }
             LibraryError::Folder(e) => write!(f, "{e}"),
@@ -48,6 +54,21 @@ impl std::error::Error for LibraryError {}
 impl From<FolderError> for LibraryError {
     fn from(e: FolderError) -> Self {
         LibraryError::Folder(e)
+    }
+}
+
+impl From<rusqlite::Error> for LibraryError {
+    fn from(e: rusqlite::Error) -> Self {
+        LibraryError::Io(e.to_string())
+    }
+}
+
+impl From<crate::oblock::OblockError> for LibraryError {
+    fn from(e: crate::oblock::OblockError) -> Self {
+        match e {
+            crate::oblock::OblockError::NoSuchBlock => LibraryError::NotFound,
+            other => LibraryError::Package(other.to_string()),
+        }
     }
 }
 

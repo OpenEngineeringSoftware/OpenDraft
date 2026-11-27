@@ -104,14 +104,6 @@ impl BlockFile {
             warnings,
         })
     }
-
-    /// The same block with another stable id (for a file that names its own).
-    fn with_uuid(mut self, uuid: BlockUuid) -> Result<BlockFile, OblockError> {
-        if let Some(entry) = self.package.entries.iter_mut().find(|e| !e.component) {
-            entry.uuid = uuid;
-        }
-        BlockFile::from_package(self.package)
-    }
 }
 
 /// A block name made from a file's name: characters a block name cannot hold

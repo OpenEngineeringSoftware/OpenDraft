@@ -14,18 +14,14 @@ fn a_block_comes_in_with_what_it_contains_shown_only_under_it() {
     let captured = capture(&mut lib, &doc, outer, &CaptureRequest::default());
     assert_eq!(captured.name, "bolt");
     assert!(!captured.replaced);
-    // Two blocks in the package, one in the list.
-    assert_eq!(lib.package().entries.len(), 2);
+    // Two blocks in its file, one in the list.
     assert_eq!(names(&lib.blocks()), ["bolt"]);
     assert_eq!(lib.blocks()[0].components, ["nut"]);
-    assert!(lib.package().drawing.validate().is_ok());
+    let file = lib.block_file(captured.id).expect("its file");
+    assert_eq!(file.drawing().blocks().len(), 2);
+    assert!(file.drawing().validate().is_ok());
     // The layer came with it.
-    assert!(lib
-        .package()
-        .drawing
-        .layers()
-        .iter()
-        .any(|l| l.name == "Symbols"));
+    assert!(file.drawing().layers().iter().any(|l| l.name == "Symbols"));
 }
 
 #[test]
@@ -81,7 +77,7 @@ fn bad_names_tags_and_folders_are_refused_before_anything_is_written() {
         LibraryError::InvalidName(_)
     ));
     assert!(lib.blocks().is_empty());
-    assert!(!store::personal(lib.root()).exists());
+    assert!(reopen(&lib).blocks().is_empty());
 }
 
 #[test]
@@ -129,82 +125,57 @@ fn a_taken_name_can_cancel_keep_both_or_replace() {
 }
 
 #[test]
-fn replacing_a_block_that_another_contains_is_refused() {
+fn a_part_is_private_to_its_block_so_its_name_is_not_taken() {
     let (_dir, mut lib) = open();
     let (doc, outer, _) = drawing_with_nested("bolt", "nut");
-    capture(&mut lib, &doc, outer, &CaptureRequest::default());
+    let bolt = capture(&mut lib, &doc, outer, &CaptureRequest::default()).id;
+    // A block of the library called "nut" is another thing from the bolt's nut.
     let (other, id) = drawing_with("nut", 7.0);
-    let replace = CaptureRequest {
-        if_name_taken: NameTaken::Replace,
-        ..Default::default()
-    };
-    let error = lib.capture(&other, id, &replace, NOW).expect_err("in use");
-    assert!(
-        matches!(error, LibraryError::NotFound | LibraryError::InUse(_)),
-        "{error:?}"
-    );
-    // Nothing changed.
-    assert_eq!(lib.package().entries.len(), 2);
+    let nut = capture(&mut lib, &other, id, &CaptureRequest::default());
+    assert!(!nut.replaced);
+    assert_eq!(nut.name, "nut");
+    assert_eq!(names(&lib.blocks()), ["bolt", "nut"]);
     assert!(lib.trash_items().is_empty());
+    let inside = lib.block_file(bolt).expect("the bolt");
+    let part = inside.drawing().block_named("nut").expect("its own nut");
+    assert_eq!(radius(part), 1.0);
 }
 
 #[test]
-fn a_shared_part_of_the_same_shape_is_added_once() {
+fn each_block_keeps_its_own_copy_of_a_shared_part() {
     let (_dir, mut lib) = open();
     let (a, bolt, _) = drawing_with_nested("bolt", "nut");
-    let (b, screw, _) = drawing_with_nested("screw", "nut");
-    capture(&mut lib, &a, bolt, &CaptureRequest::default());
-    capture(&mut lib, &b, screw, &CaptureRequest::default());
-    let nuts = lib
-        .package()
-        .drawing
-        .blocks()
-        .iter()
-        .filter(|d| d.name.starts_with("nut"))
-        .count();
-    assert_eq!(nuts, 1);
-    assert_eq!(names(&lib.blocks()), ["bolt", "screw"]);
-    assert!(lib.package().drawing.validate().is_ok());
-}
-
-#[test]
-fn a_part_of_another_shape_is_added_under_a_new_name() {
-    let (_dir, mut lib) = open();
-    let (a, bolt, _) = drawing_with_nested("bolt", "nut");
-    capture(&mut lib, &a, bolt, &CaptureRequest::default());
-
     let mut b = opendraft_core::Document::default();
     let big_nut = add_block(&mut b, "nut", "Symbols", 5.0, &[]);
     let screw = add_block(&mut b, "screw", "Symbols", 2.0, &[&big_nut]);
-    capture(&mut lib, &b, screw.id, &CaptureRequest::default());
+    let bolt = capture(&mut lib, &a, bolt, &CaptureRequest::default()).id;
+    let screw = capture(&mut lib, &b, screw.id, &CaptureRequest::default()).id;
 
-    let drawing = &lib.package().drawing;
-    assert_eq!(radius(drawing.block_named("nut").expect("kept")), 1.0);
-    assert_eq!(radius(drawing.block_named("nut_2").expect("added")), 5.0);
-    // Each block still holds its own nut.
-    let nested = |name: &str| {
-        drawing
-            .block_named(name)
-            .and_then(|d| d.nested_blocks().next())
+    let nut_of = |id| {
+        let file = lib.block_file(id).expect("a block");
+        radius(file.drawing().block_named("nut").expect("a nut"))
     };
-    assert_ne!(nested("bolt"), nested("screw"));
+    assert_eq!((nut_of(bolt), nut_of(screw)), (1.0, 5.0));
+    assert_eq!(names(&lib.blocks()), ["bolt", "screw"]);
 }
 
 #[test]
-fn layers_of_two_drawings_are_merged_by_name() {
+fn a_block_keeps_the_layers_it_uses_and_no_others() {
     let (_dir, mut lib) = open();
     let (a, ida) = drawing_with("one", 1.0);
     let (b, idb) = drawing_with("two", 2.0);
-    capture(&mut lib, &a, ida, &CaptureRequest::default());
-    capture(&mut lib, &b, idb, &CaptureRequest::default());
-    let layers: Vec<_> = lib
-        .package()
-        .drawing
-        .layers()
-        .iter()
-        .filter(|l| l.name == "Symbols")
-        .collect();
-    assert_eq!(layers.len(), 1);
+    let one = capture(&mut lib, &a, ida, &CaptureRequest::default()).id;
+    let two = capture(&mut lib, &b, idb, &CaptureRequest::default()).id;
+    for id in [one, two] {
+        let file = lib.block_file(id).expect("a block");
+        let layers: Vec<_> = file
+            .drawing()
+            .layers()
+            .iter()
+            .filter(|l| l.name == "Symbols")
+            .collect();
+        assert_eq!(layers.len(), 1);
+    }
 }
 
 #[test]

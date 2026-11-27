@@ -3,17 +3,10 @@ use crate::test_support::drawing_with_nested;
 
 const DAY: u64 = 24 * 60 * 60;
 
-fn uuid_of(lib: &Library, name: &str) -> BlockUuid {
-    let id = lib
-        .package()
-        .drawing
-        .block_named(name)
-        .map(|b| b.id)
-        .expect("block");
-    lib.package()
-        .entry_for_block(id)
-        .map(|e| e.uuid)
-        .expect("entry")
+fn trash_rows(lib: &Library) -> i64 {
+    lib.connection()
+        .query_row("SELECT count(*) FROM trash", [], |r| r.get(0))
+        .expect("counts")
 }
 
 #[test]
@@ -33,7 +26,7 @@ fn a_deleted_block_is_in_the_trash_and_can_come_back_as_it_was() {
         (items[0].name.as_str(), items[0].folder.as_str()),
         ("valve", "Piping/Valves")
     );
-    assert!(store::trash_file(lib.root(), items[0].id).exists());
+    assert_eq!(trash_rows(&lib), 1);
 
     let restored = lib
         .restore(items[0].id, NameTaken::Cancel, NOW)
@@ -45,7 +38,7 @@ fn a_deleted_block_is_in_the_trash_and_can_come_back_as_it_was() {
     assert_eq!(block.tags, ["water"]);
     assert_eq!(block.folder, "Piping/Valves");
     assert!(lib.trash_items().is_empty());
-    assert!(!store::trash_file(lib.root(), items[0].id).exists());
+    assert_eq!(trash_rows(&lib), 0);
     // Favourites are choices, not content: they are not kept through the Trash.
     assert!(!block.favourite);
 }
@@ -92,33 +85,32 @@ fn restoring_onto_a_taken_name_asks_as_capture_does() {
 }
 
 #[test]
-fn a_block_goes_with_the_parts_only_it_uses() {
+fn a_block_goes_with_its_parts_and_comes_back_with_them() {
     let (_dir, mut lib) = open();
     let (doc, outer, _) = drawing_with_nested("bolt", "nut");
     let bolt = lib
         .capture(&doc, outer, &CaptureRequest::default(), NOW)
         .expect("captures")
         .id;
-    let nut = uuid_of(&lib, "nut");
 
     lib.delete_block(bolt, NOW).expect("deletes");
-    assert!(lib.package().entries.is_empty());
-    assert!(lib.package().drawing.blocks().is_empty());
+    assert!(lib.blocks().is_empty());
+    assert!(lib.block_file(bolt).is_err());
 
     let item = lib.trash_items()[0].id;
     lib.restore(item, NameTaken::Cancel, NOW).expect("restores");
-    assert_eq!(lib.package().entries.len(), 2);
-    // Both come back with the ids they had.
-    assert_eq!(uuid_of(&lib, "nut"), nut);
+    // It comes back with the id it had and the part inside it.
+    let file = lib.block_file(bolt).expect("back");
+    assert!(file.drawing().block_named("nut").is_some());
+    assert!(file.drawing().validate().is_ok());
     assert_eq!(
         lib.block(bolt).map(|b| b.components),
         Some(vec!["nut".into()])
     );
-    assert!(lib.package().drawing.validate().is_ok());
 }
 
 #[test]
-fn a_part_that_another_block_uses_stays() {
+fn deleting_a_block_leaves_the_others_with_a_part_of_the_same_name() {
     let (_dir, mut lib) = open();
     let (a, bolt, _) = drawing_with_nested("bolt", "nut");
     let (b, screw, _) = drawing_with_nested("screw", "nut");
@@ -126,38 +118,32 @@ fn a_part_that_another_block_uses_stays() {
         .capture(&a, bolt, &CaptureRequest::default(), NOW)
         .expect("captures")
         .id;
-    lib.capture(&b, screw, &CaptureRequest::default(), NOW)
-        .expect("captures");
+    let screw = lib
+        .capture(&b, screw, &CaptureRequest::default(), NOW)
+        .expect("captures")
+        .id;
 
     lib.delete_block(bolt, NOW).expect("deletes");
     assert_eq!(names(&lib.blocks()), ["screw"]);
-    assert!(lib.package().drawing.block_named("nut").is_some());
-    assert!(lib.package().drawing.validate().is_ok());
+    let file = lib.block_file(screw).expect("kept whole");
+    assert!(file.drawing().block_named("nut").is_some());
+    assert!(file.drawing().validate().is_ok());
 
-    // Restoring the bolt reuses the nut that is there.
     let item = lib.trash_items()[0].id;
     lib.restore(item, NameTaken::Cancel, NOW).expect("restores");
-    assert_eq!(lib.package().entries.len(), 3);
     assert_eq!(names(&lib.blocks()), ["bolt", "screw"]);
 }
 
 #[test]
-fn a_block_inside_another_cannot_be_deleted() {
+fn a_block_that_is_not_there_cannot_be_deleted() {
     let (_dir, mut lib) = open();
-    let (doc, outer, _) = drawing_with_nested("bolt", "nut");
-    lib.capture(&doc, outer, &CaptureRequest::default(), NOW)
-        .expect("captures");
-    let nut = uuid_of(&lib, "nut");
-    assert_eq!(
-        lib.delete_block(nut, NOW),
-        Err(LibraryError::InUse(vec!["bolt".into()]))
-    );
-    assert_eq!(lib.package().entries.len(), 2);
-    assert!(lib.trash_items().is_empty());
+    add(&mut lib, "valve", 1.0);
     assert_eq!(
         lib.delete_block(BlockUuid::new(), NOW),
         Err(LibraryError::NotFound)
     );
+    assert!(lib.trash_items().is_empty());
+    assert_eq!(lib.blocks().len(), 1);
 }
 
 #[test]
@@ -187,26 +173,28 @@ fn deleting_a_folder_trashes_its_blocks_and_restoring_remakes_the_folder() {
 }
 
 #[test]
-fn a_folder_with_a_block_something_outside_holds_is_not_deleted() {
+fn deleting_a_folder_leaves_blocks_in_other_folders_whatever_they_hold() {
     let (_dir, mut lib) = open();
     let (doc, outer, _) = drawing_with_nested("bolt", "nut");
     let bolt = lib
         .capture(&doc, outer, &CaptureRequest::default(), NOW)
         .expect("captures")
         .id;
-    // A top-level nut that the bolt also holds, in a folder of its own.
     let (d2, nut2) = crate::test_support::drawing_with("nut", 1.0);
     let request = CaptureRequest {
         folder: "Parts".into(),
-        if_name_taken: NameTaken::KeepBoth,
         ..Default::default()
     };
     lib.capture(&d2, nut2, &request, NOW).expect("captures");
-    let before = lib.package().entries.len();
-    lib.delete_folder("Parts", NOW)
-        .expect("a separate block, so it goes");
-    assert_eq!(lib.package().entries.len(), before - 1);
+    lib.delete_folder("Parts", NOW).expect("deletes");
+    assert_eq!(names(&lib.blocks()), ["bolt"]);
     assert!(lib.block(bolt).is_some());
+    assert!(lib
+        .block_file(bolt)
+        .expect("whole")
+        .drawing()
+        .block_named("nut")
+        .is_some());
 }
 
 #[test]
@@ -216,21 +204,16 @@ fn the_trash_is_emptied_after_thirty_days_or_by_hand() {
     let b = add(&mut lib, "b", 2.0);
     lib.delete_block(a, NOW).expect("deletes");
     lib.delete_block(b, NOW + 20 * DAY).expect("deletes");
-    let files: Vec<_> = lib
-        .trash_items()
-        .iter()
-        .map(|t| store::trash_file(lib.root(), t.id))
-        .collect();
 
     assert_eq!(lib.purge_trash(NOW + 30 * DAY).expect("purges"), 0);
     assert_eq!(lib.purge_trash(NOW + 30 * DAY + 1).expect("purges"), 1);
     assert_eq!(lib.trash_items().len(), 1);
     assert_eq!(lib.trash_items()[0].name, "b");
-    assert_eq!(files.iter().filter(|f| f.exists()).count(), 1);
+    assert_eq!(trash_rows(&lib), 1);
 
     assert_eq!(lib.empty_trash().expect("empties"), 1);
     assert!(lib.trash_items().is_empty());
-    assert!(files.iter().all(|f| !f.exists()));
+    assert_eq!(trash_rows(&lib), 0);
     assert_eq!(lib.empty_trash().expect("nothing to do"), 0);
 }
 
@@ -240,7 +223,9 @@ fn a_restore_that_fails_leaves_the_trash_alone() {
     let id = add(&mut lib, "valve", 1.0);
     lib.delete_block(id, NOW).expect("deletes");
     let item = lib.trash_items()[0].id;
-    std::fs::write(store::trash_file(lib.root(), item), b"damaged").expect("damages");
+    lib.connection()
+        .execute("UPDATE trash SET data = x'00'", [])
+        .expect("damages");
     let error = lib
         .restore(item, NameTaken::Cancel, NOW)
         .expect_err("damaged");
