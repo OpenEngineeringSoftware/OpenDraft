@@ -76,6 +76,7 @@ The starting drawings are Lucide's (ISC licence, `LICENSE-Lucide.txt`).
 | ![](content-folder.svg) | `content-folder.svg` | folder | (not used) |
 | ![](content-forward.svg) | `content-forward.svg` | arrow-right | (not used) |
 | ![](content-recent.svg) | `content-recent.svg` | history | (not used) |
+| ![](content-rename.svg) | `content-rename.svg` | pencil | (not used) |
 | ![](content-trash.svg) | `content-trash.svg` | trash-2 | (not used) |
 | ![](content-up.svg) | `content-up.svg` | arrow-up | (not used) |
 | ![](context-deselect-all.svg) | `context-deselect-all.svg` | square-x | app/context_menu.rs |

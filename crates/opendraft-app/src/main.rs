@@ -34,6 +34,7 @@ mod block_cmd;
 mod block_commands;
 mod block_dialog_cmd;
 mod block_editor;
+mod block_rename;
 mod boundary_cmd;
 mod break_cmd;
 mod build_info;

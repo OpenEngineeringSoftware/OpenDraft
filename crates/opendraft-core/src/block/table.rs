@@ -122,6 +122,29 @@ impl Document {
         Ok(Redefinition { blocks, objects })
     }
 
+    /// The table with block `id` called `name`, and every insert of it (in
+    /// the drawing or inside other blocks) pointing at the renamed record.
+    /// Only the definition's name changes, so every reference follows with
+    /// its attributes and dynamic values. Refused for an unknown block, a
+    /// name a block cannot have (an anonymous `*` name among them), and a
+    /// name another block has, ignoring case; changing only the case is
+    /// allowed.
+    pub fn renamed_block(&self, id: BlockId, name: &str) -> Result<Redefinition, String> {
+        let name = name.trim();
+        let Some(old) = self.block(id) else {
+            return Err("That block is no longer in the drawing.".to_owned());
+        };
+        if let Some(problem) = block_name_problem(name) {
+            return Err(problem.to_owned());
+        }
+        if let Some(other) = self.block_named(name).filter(|b| b.id != id) {
+            return Err(format!("A block called \"{}\" already exists.", other.name));
+        }
+        let mut def = (**old).clone();
+        def.name = name.to_owned();
+        self.redefined_blocks(def).map_err(str::to_owned)
+    }
+
     /// `def` rebuilt so that every insert of `target` inside it, at any
     /// depth, uses the record in `done`.
     fn repointed(

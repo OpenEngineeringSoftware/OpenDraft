@@ -11,7 +11,7 @@
 
 use eframe::egui;
 use opendraft_content::blocks_payload::BlockUuid;
-use opendraft_core::Document;
+use opendraft_core::{BlockId, Document};
 use opendraft_ui::{icons, Theme};
 
 use crate::content_library::LibraryHandle;
@@ -20,9 +20,11 @@ mod actions;
 mod chrome;
 mod contents;
 mod details;
+mod drawing;
 mod filter;
 mod import;
 mod list;
+mod name_edit;
 mod snapshot;
 mod thumbnails;
 mod tree;
@@ -65,16 +67,18 @@ pub enum Selected {
     Trashed(u64),
 }
 
-/// A name being typed.
+/// A name being typed: a new folder's, or a folder's, a library block's or
+/// a block of the open drawing's new name.
 #[derive(Clone, Debug)]
 pub enum Editing {
     NewFolder { parent: String, text: String },
     RenameFolder { path: String, text: String },
     RenameBlock { id: BlockUuid, text: String },
+    RenameDrawingBlock { id: BlockId, text: String },
 }
 
 /// What the window asks of the app, which owns the commands.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Request {
     /// Start LIBINSERT on this block.
     Insert(BlockUuid),
@@ -82,6 +86,9 @@ pub enum Request {
     AddObjects,
     /// Ask for a drawing file and offer its blocks for import.
     PickImport,
+    /// Rename a block of the open drawing (one undo step); the answer comes
+    /// back through [`Window::drawing_block_renamed`].
+    RenameDrawingBlock(BlockId, String),
 }
 
 /// What the window reads of the app.
@@ -117,6 +124,57 @@ impl Window {
     pub fn say(&mut self, text: String) {
         self.status = text;
         self.open = true;
+    }
+
+    /// Takes the app's answer to [`Request::RenameDrawingBlock`]: the old
+    /// name (`None` when it was unchanged) and the drawing's revisions before
+    /// and after. The name bar closes and the block stays chosen under its
+    /// new name, with its picture; or the bar stays open with the reason in
+    /// the status line.
+    pub fn drawing_block_renamed(
+        &mut self,
+        result: Result<Option<String>, String>,
+        name: &str,
+        revisions: (u64, u64),
+    ) {
+        let name = name.trim();
+        match result {
+            Ok(renamed) => {
+                self.editing = None;
+                self.selected = Selected::Drawing(name.to_owned());
+                if let Some(old) = renamed {
+                    self.thumbs.drawing_block_renamed(&old, name, revisions);
+                    self.status = format!("Block \"{old}\" renamed to \"{name}\".");
+                }
+            }
+            Err(why) => self.status = why,
+        }
+    }
+
+    /// Opens the window on This drawing with block `id` being renamed, as
+    /// its pencil does.
+    #[cfg(test)]
+    pub(crate) fn start_drawing_rename(&mut self, id: BlockId, name: &str) {
+        self.open_on(Place::Drawing);
+        self.selected = Selected::Drawing(name.to_owned());
+        self.editing = Some(Editing::RenameDrawingBlock {
+            id,
+            text: name.to_owned(),
+        });
+    }
+
+    /// Whether a name is being typed in the window (a block's or a folder's).
+    pub fn typing_a_name(&self) -> bool {
+        self.open && self.editing.is_some()
+    }
+
+    /// Whether a block's name field is open.
+    #[cfg(test)]
+    pub(crate) fn renaming(&self) -> bool {
+        matches!(
+            self.editing,
+            Some(Editing::RenameBlock { .. } | Editing::RenameDrawingBlock { .. })
+        )
     }
 
     /// Opens the window on `place`.

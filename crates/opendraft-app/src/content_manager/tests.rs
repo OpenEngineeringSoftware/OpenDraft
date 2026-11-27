@@ -320,3 +320,77 @@ fn the_window_inserts_through_the_command_the_app_starts() {
     assert!(!other.command_running());
     assert_eq!(other.session().document().len(), 1);
 }
+
+#[test]
+fn a_block_of_the_drawing_is_renamed_from_its_menu_and_stays_chosen() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (mut state, mut win) = setup(dir.path());
+    win.open_on(Place::Drawing);
+    let id = state
+        .session()
+        .document()
+        .block_named("Box")
+        .map(|b| b.id)
+        .expect("the drawing's block");
+
+    // Rename on the menu chooses the block and opens the name bar on its name.
+    apply(&mut win, &state, drawing::rename(id, "Box").to_vec());
+    assert_eq!(win.selected, Selected::Drawing("Box".into()));
+    assert!(
+        matches!(&win.editing, Some(Editing::RenameDrawingBlock { id: i, text }) if *i == id && text == "Box")
+    );
+
+    // A name a block cannot hold keeps the bar open and says why.
+    let bad = apply(
+        &mut win,
+        &state,
+        vec![Action::RenameDrawingBlock(id, "a/b".into())],
+    );
+    assert_eq!(bad, [Request::RenameDrawingBlock(id, "a/b".into())]);
+    let refused = state.rename_block(id, "a/b");
+    win.drawing_block_renamed(refused, "a/b", (0, 0));
+    assert!(win.editing.is_some() && win.status.contains("cannot contain"));
+    assert!(state.session().document().block_named("Box").is_some());
+
+    // OK asks the app, which renames it; the window follows the new name.
+    let asked = apply(
+        &mut win,
+        &state,
+        vec![Action::RenameDrawingBlock(id, "Crate".into())],
+    );
+    let [Request::RenameDrawingBlock(asked_id, name)] = asked.as_slice() else {
+        panic!("one request: {asked:?}")
+    };
+    let before = state.session().revision();
+    let result = state.rename_block(*asked_id, name);
+    let after = state.session().revision();
+    win.drawing_block_renamed(result, name, (before, after));
+    assert!(win.editing.is_none());
+    assert_eq!(win.selected, Selected::Drawing("Crate".into()));
+    assert_eq!(win.status, "Block \"Box\" renamed to \"Crate\".");
+    assert!(state.session().document().block_named("Crate").is_some());
+    // The window still draws, the details of the renamed block included.
+    let _ = frame(&mut win, &state);
+}
+
+#[test]
+fn a_block_is_renamed_in_its_details_and_choosing_another_closes_the_field() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let (state, mut win) = setup(dir.path());
+    win.open_on(Place::Drawing);
+    let id = state
+        .session()
+        .document()
+        .block_named("Box")
+        .map(|b| b.id)
+        .expect("the drawing's block");
+    apply(&mut win, &state, drawing::rename(id, "Box").to_vec());
+    // The field is drawn in the details, where the name is, not above the tiles.
+    let _ = frame(&mut win, &state);
+    assert!(matches!(
+        win.editing,
+        Some(Editing::RenameDrawingBlock { .. })
+    ));
+    apply(&mut win, &state, vec![Action::Select(Selected::Nothing)]);
+    assert!(win.editing.is_none());
+}

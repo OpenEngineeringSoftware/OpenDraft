@@ -7,6 +7,7 @@ use crate::{dock, dynamic_input::Field, state::AppState};
 
 mod command_line_focus;
 mod command_line_strip;
+mod content_rename;
 mod ctrl;
 mod dim_styles;
 mod enter_repeats;

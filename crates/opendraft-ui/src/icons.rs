@@ -92,6 +92,7 @@ icons! {
     CONTENT_FOLDER = '\u{e0dc}';
     CONTENT_FORWARD = '\u{e04d}';
     CONTENT_RECENT = '\u{e1f4}';
+    CONTENT_RENAME = '\u{e1f8}';
     CONTENT_TRASH = '\u{e18d}';
     CONTENT_UP = '\u{e04e}';
     CONTEXT_DESELECT_ALL = '\u{e178}';

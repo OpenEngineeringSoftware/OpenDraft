@@ -95,7 +95,7 @@ fn an_uneven_scale_turns_circles_into_exact_ellipses() {
     }
 }
 
-fn nested_doc() -> (Document, Arc<BlockDef>, Arc<BlockDef>) {
+pub(crate) fn nested_doc() -> (Document, Arc<BlockDef>, Arc<BlockDef>) {
     let mut doc = Document::default();
     let inner = square_block();
     doc.push_block(inner.clone());
