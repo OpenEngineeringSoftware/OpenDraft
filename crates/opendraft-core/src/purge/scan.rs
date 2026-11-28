@@ -38,7 +38,7 @@ pub fn unused_blocks(doc: &Document) -> Vec<Arc<BlockDef>> {
     }
     doc.blocks()
         .iter()
-        .filter(|b| !kept.iter().any(|k| k.id == b.id))
+        .filter(|b| !kept.iter().any(|k| k.id == b.id) && doc.xref(b.id).is_none())
         .cloned()
         .collect()
 }
@@ -48,6 +48,9 @@ fn block_entries(doc: &Document, out: &mut Vec<Entry>) {
     let gone = |id: BlockId| unused.iter().any(|u| u.id == id);
     for block in doc.blocks() {
         let mut reasons = Vec::new();
+        if doc.xref(block.id).is_some() {
+            reasons.push("It is an external reference".to_owned());
+        }
         if !gone(block.id) {
             let refs = doc.block_references(block.id).len();
             if refs > 0 {
@@ -106,6 +109,9 @@ fn layer_entries(doc: &Document, out: &mut Vec<Entry>) {
         if layer.id == doc.current_layer() {
             reasons.push("It is the current layer".to_owned());
         }
+        if doc.xref_layer_owner(layer.id).is_some() {
+            reasons.push("It is an external reference layer".to_owned());
+        }
         let on = doc
             .objects()
             .iter()
@@ -151,6 +157,9 @@ fn linetype_entries(doc: &Document, out: &mut Vec<Entry>) {
         }
         if by_objects && !by_layer {
             reasons.push("Used by objects or blocks".to_owned());
+        }
+        if doc.xref_content_uses_linetype(record.id) {
+            reasons.push("Used by an external reference".to_owned());
         }
         out.push(Entry {
             item: Item::Linetype(record.id),
@@ -198,6 +207,9 @@ fn text_style_entries(doc: &Document, styles: &[Entry], out: &mut Vec<Entry>) {
         }
         if doc.text_style_in_use(style.id) {
             reasons.push("Used by text, dimensions or multileaders".to_owned());
+        }
+        if doc.xref_content_uses_text_style(style.id) {
+            reasons.push("Used by an external reference".to_owned());
         }
         for d in doc.dim_styles() {
             if d.text_style == style.id && !going(&Item::DimStyle(d.name.clone())) {

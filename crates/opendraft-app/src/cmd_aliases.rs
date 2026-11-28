@@ -200,6 +200,13 @@ pub const ALIASES: &[(&str, &str, &str)] = &[
     ("-PURGE", "-PURGE", "block.purge_all"),
     ("BE", "BEDIT", "block.edit"),
     ("BEDIT", "BEDIT", "block.edit"),
+    // External references: the command-line form until the palette lands.
+    ("XA", "XATTACH", "xref.attach"),
+    ("XATTACH", "XATTACH", "xref.attach"),
+    ("-XREF", "-XREF", "xref.command_line"),
+    ("-XR", "-XREF", "xref.command_line"),
+    ("XREF", "XREF", "xref.palette"),
+    ("XR", "XREF", "xref.palette"),
     ("BSAVE", "BSAVE", "block.save"),
     ("PARAM", "BPARAMETER", "block.parameter"),
     ("BPARAMETER", "BPARAMETER", "block.parameter"),

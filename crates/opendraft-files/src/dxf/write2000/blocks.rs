@@ -32,11 +32,27 @@ pub(super) fn write_definition(
     let Some(&record) = ids.blocks.get(&def.id) else {
         return Ok(());
     };
+    if let Some(xref) = document.xref(def.id) {
+        // The reference, not its contents: an empty xref block with its
+        // saved path and attach/overlay flag.
+        let flags = 4 | if xref.kind.is_overlay() { 8 } else { 0 };
+        return block_at(
+            out,
+            h,
+            (&def.name, &def.description),
+            (record, def.base),
+            flags,
+            &xref.path,
+            |_, _| Ok(()),
+        );
+    }
     block_at(
         out,
         h,
         (&def.name, &def.description),
         (record, def.base),
+        i32::from(def.name.starts_with("*D")),
+        "",
         |out, h| {
             // Nothing is looked up under this id.
             let none = EntityId(u64::MAX);

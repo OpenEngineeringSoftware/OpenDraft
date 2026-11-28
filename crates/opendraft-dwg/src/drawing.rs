@@ -67,20 +67,9 @@ pub struct DwgEntity {
     pub shape: Shape,
 }
 
-/// A block definition: a named one, or an anonymous one (a modified dynamic
-/// block's `*U`) that a reference places. The anonymous pictures of
-/// dimensions and hatches that nothing places, and external references, are
-/// not read.
-#[derive(Clone, Debug, PartialEq)]
-pub struct DwgBlock {
-    pub handle: DwgHandle,
-    pub name: String,
-    /// The point of the block's coordinates an insert puts at its insertion point.
-    pub base: [f64; 2],
-    pub description: String,
-    /// In the block's own coordinates, in drawing order.
-    pub entities: Vec<DwgEntity>,
-}
+/// Block-table records (named blocks and external references).
+mod defs;
+pub use defs::{DwgBlock, DwgXref};
 
 #[derive(Debug)]
 pub struct Drawing {
@@ -94,6 +83,8 @@ pub struct Drawing {
     pub entities: Vec<DwgEntity>,
     /// The named blocks, in the order they were made.
     pub blocks: Vec<DwgBlock>,
+    /// The external references, in block-table order.
+    pub xrefs: Vec<DwgXref>,
     /// The text styles, in handle order (the order they were made).
     pub text_styles: Vec<DwgTextStyle>,
     pub report: ImportReport,
@@ -363,6 +354,7 @@ impl Drawing {
 
         let entities = entities_of(&model.entities, &pass, &mut report)?;
         let mut blocks = Vec::new();
+        let xrefs = defs::collect(&pass, &mut report);
         let roots = std::iter::once(&model.entities).chain(
             pass.blocks
                 .values()
@@ -434,6 +426,7 @@ impl Drawing {
             linetypes,
             entities,
             blocks,
+            xrefs,
             text_styles,
             report,
         })

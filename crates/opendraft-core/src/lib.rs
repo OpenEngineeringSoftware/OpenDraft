@@ -101,6 +101,7 @@ mod validate;
 mod validate_id_tests;
 mod vertex_edit;
 pub mod width;
+pub mod xref;
 
 pub use array_record::{ArrayRecord, ArrayShape};
 pub use block::{
@@ -152,6 +153,11 @@ pub use text_style::{
 pub use units::{AngleFormat, InsertUnits, LengthFormat, Units};
 pub use validate::DocumentError;
 pub use vertex_edit::VertexGrip;
+pub use xref::{
+    path_problem, TextStylePlan, XrefAttachDraft, XrefDef, XrefKind, XrefLayer, XrefLoadRequest,
+    XrefPathType, XrefPlan, XrefProblem, XrefReport, XrefStamp, MAX_XREF_NOTES, MAX_XREF_PATH,
+    MAX_XREF_SKIPPED_KINDS,
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Point {

@@ -236,6 +236,9 @@ mod wblock_cmd;
 mod whats_new;
 mod window_memory;
 mod xline_cmd;
+mod xref_apply;
+mod xref_cmd;
+mod xref_load;
 mod zoom_cmd;
 
 use eframe::egui;

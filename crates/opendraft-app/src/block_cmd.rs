@@ -18,7 +18,7 @@ pub(crate) fn list_blocks(doc: &Document) -> Vec<String> {
         return vec![key!("No blocks are defined in this drawing.").to_owned()];
     }
     let mut lines = vec![key!("Defined blocks:").to_owned()];
-    for block in doc.blocks() {
+    for block in doc.blocks().iter().filter(|b| doc.xref(b.id).is_none()) {
         let uses = doc.block_references(block.id).len();
         lines.push(format!(
             "  \"{}\": {}",

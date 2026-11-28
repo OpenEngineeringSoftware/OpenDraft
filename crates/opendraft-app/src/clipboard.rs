@@ -26,6 +26,15 @@ use opendraft_ui::key;
 /// The first word of the text put on the system clipboard.
 const MARK: &str = "opendraft-clipboard";
 
+/// Why `ids` cannot be copied out of `document`, or `None` when they can.
+/// Copying an external reference would carry its snapshot without the record
+/// that makes it a reference, so it is refused rather than flattened.
+fn refusal(document: &Document, ids: &[EntityId]) -> Option<&'static str> {
+    document.xref_reachable_from(ids).map(|_| {
+        key!("An external reference cannot be copied to another drawing yet; attach it in the target drawing.")
+    })
+}
+
 /// What Copy and Cut last put aside.
 #[derive(Clone)]
 pub struct Clipboard {
@@ -176,23 +185,34 @@ enum Paste {
 }
 
 impl AppState {
-    /// Copy `ids` of the active drawing to the clipboard.
-    pub(crate) fn copy_to_clipboard(&mut self, ids: &[EntityId], base: Option<Point>) {
+    /// Copy `ids` of the active drawing to the clipboard. Returns whether
+    /// anything was copied.
+    pub(crate) fn copy_to_clipboard(&mut self, ids: &[EntityId], base: Option<Point>) -> bool {
         let document = self.docs[self.active].session.document();
+        if let Some(why) = refusal(document, ids) {
+            self.message = why.to_owned();
+            return false;
+        }
         match Clipboard::of(document, ids, base) {
             Some(clip) => {
                 let said = Wording::new(key!("Copied %{objects}"), &[]);
                 self.set_message(said.part("objects", crate::text::objects(clip.count())));
                 self.clipboard.set(clip);
+                true
             }
-            None => self.message = key!("Nothing to copy").to_owned(),
+            None => {
+                self.message = key!("Nothing to copy").to_owned();
+                false
+            }
         }
     }
 
     /// Cut: copy the selection, then erase it.
     fn cut_to_clipboard(&mut self) {
         let ids: Vec<_> = self.selection().iter().copied().collect();
-        self.copy_to_clipboard(&ids, None);
+        if !self.copy_to_clipboard(&ids, None) {
+            return;
+        }
         if !ids.is_empty() {
             self.perform(RemoveEntities::new(ids));
             self.message = key!("Cut to the clipboard").to_owned();
@@ -204,6 +224,10 @@ impl AppState {
             self.message = key!("The clipboard is empty").to_owned();
             return;
         };
+        if !clip.drawing.xrefs().is_empty() {
+            self.message = key!("An external reference cannot be copied to another drawing yet; attach it in the target drawing.").to_owned();
+            return;
+        }
         if how == Paste::Original {
             let count = plural(clip.count(), "object");
             let placement = Placement::Loose { dx: 0.0, dy: 0.0 };
@@ -265,6 +289,11 @@ fn with_warnings(said: String, sink: &WarningSink) -> String {
 /// COPYBASE: pick objects and a base point, and copy them with it.
 fn copy_with_base(ed: &mut Editor, slot: ClipboardSlot) -> Result<(), Cancelled> {
     let ids = ed.pickset_or_select(key!("Select objects"))?;
+    let check = ids.clone();
+    if let Some(why) = ed.read(move |doc| refusal(doc, &check).map(str::to_owned))? {
+        ed.say(why);
+        return Ok(());
+    }
     let base = ed.get_point(key!("Specify base point"))?;
     match ed.read(move |doc| Clipboard::of(doc, &ids, Some(base)))? {
         Some(clip) => {

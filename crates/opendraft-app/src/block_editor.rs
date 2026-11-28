@@ -138,6 +138,13 @@ impl AppState {
             return;
         }
         let document = &doc.session.document();
+        if document.is_xref_block(id) {
+            self.message = key!(
+                "An external reference cannot be edited in place; detach it or edit the source drawing."
+            )
+            .to_owned();
+            return;
+        }
         let (Some(editor), Some(block)) = (document.block_editor_document(id), document.block(id))
         else {
             self.message = key!("That block is not in this drawing.").to_owned();

@@ -349,8 +349,15 @@ pub fn write_with(document: &Document, extras: Option<&BlockExtras>) -> Result<E
     out.pair(9, "$INSBASE");
     match extras {
         Some(b) => out.point3(10, finite(b.insbase.x)?, finite(b.insbase.y)?, 0.0),
-        None => out.point3(10, 0.0, 0.0, 0.0),
+        None => out.point3(
+            10,
+            finite(document.insert_base().x)?,
+            finite(document.insert_base().y)?,
+            0.0,
+        ),
     }
+    out.pair(9, "$VISRETAIN");
+    out.pair(70, i32::from(document.visretain()));
     let (lo, hi) = match document.model_bounds() {
         Some(b) => (
             (finite(b.min.x)?, finite(b.min.y)?),
@@ -398,6 +405,8 @@ fn block(
         h,
         (name, ""),
         (record, opendraft_core::Point::default()),
+        i32::from(name.starts_with("*D")),
+        "",
         body,
     )
 }
@@ -408,6 +417,8 @@ fn block_at(
     h: &mut Handles,
     (name, description): (&str, &str),
     (record, base): (u32, opendraft_core::Point),
+    flags: i32,
+    path: &str,
     mut body: impl FnMut(&mut Out, &mut Handles) -> Result<(), FileError>,
 ) -> Result<(), FileError> {
     out.pair(0, "BLOCK");
@@ -417,11 +428,10 @@ fn block_at(
     out.pair(8, 0);
     out.pair(100, "AcDbBlockBegin");
     out.pair(2, name);
-    // Dimension pictures are anonymous blocks.
-    out.pair(70, i32::from(name.starts_with("*D")));
+    out.pair(70, flags);
     out.point3(10, finite(base.x)?, finite(base.y)?, 0.0);
     out.pair(3, name);
-    out.pair(1, "");
+    out.pair(1, path);
     if !description.is_empty() {
         out.pair(4, description);
     }
@@ -532,6 +542,106 @@ mod tests {
             .iter()
             .find(|(c, _)| *c == code)
             .map(|(_, v)| v.as_str())
+    }
+
+    #[test]
+    fn an_external_reference_round_trips_by_name_path_and_layer_flags() {
+        use std::sync::Arc;
+
+        use opendraft_core::{
+            BlockDef, BlockEntity, BlockObjectId, Insert, XrefDef, XrefKind, XrefLayer,
+            XrefPathType, XrefReport,
+        };
+
+        let mut doc = Document::default();
+        let walls = doc.allocate_layer_id();
+        doc.push_layer(Layer::new(walls, "base|Walls"));
+        let root_id = doc.allocate_block_id();
+        let root = Arc::new(BlockDef {
+            id: root_id,
+            name: "base".into(),
+            base: Point::new(0.0, 0.0),
+            description: String::new(),
+            unit: Default::default(),
+            entities: vec![BlockEntity::new(
+                BlockObjectId(0),
+                Entity::Line {
+                    start: Point::new(0.0, 0.0),
+                    end: Point::new(1.0, 1.0),
+                },
+                Attributes::on_layer(LayerId::DEFAULT),
+            )],
+            dynamic: None,
+        });
+        doc.push_block(root.clone());
+        doc.set_xrefs(vec![XrefDef {
+            block: root_id,
+            path: "parts/base.dwg".into(),
+            path_type: XrefPathType::Relative,
+            kind: XrefKind::Overlay,
+            unloaded: false,
+            stamp: None,
+            layers: vec![XrefLayer {
+                source: "Walls".into(),
+                layer: walls,
+            }],
+            blocks: Vec::new(),
+            report: XrefReport::default(),
+        }]);
+        doc.add(Entity::Insert(Box::new(Insert::new_xref(
+            root,
+            Point::new(10.0, 5.0),
+        ))));
+        doc.set_insert_base(Point::new(1.0, 2.0));
+        doc.set_visretain(false);
+
+        let bytes = write(&doc).unwrap().bytes;
+        let pairs = pairs(&bytes);
+        // The BLOCK record called "base", headers included.
+        let blocks: Vec<Vec<(i32, String)>> = pairs
+            .iter()
+            .enumerate()
+            .filter(|(_, (c, v))| *c == 0 && v == "BLOCK")
+            .map(|(at, _)| {
+                pairs[at..]
+                    .iter()
+                    .skip(1)
+                    .take_while(|(c, _)| *c != 0)
+                    .cloned()
+                    .collect()
+            })
+            .collect();
+        let block = blocks
+            .iter()
+            .find(|b| value(b, 2) == Some("base"))
+            .expect("the reference's block");
+        assert_eq!(value(block, 70), Some("12"), "xref and overlay flags");
+        assert_eq!(value(block, 1), Some("parts/base.dwg"));
+        let layer = {
+            let at = pairs
+                .iter()
+                .position(|(c, v)| *c == 2 && v == "base|Walls")
+                .unwrap();
+            let start = pairs[..at].iter().rposition(|(c, _)| *c == 0).unwrap();
+            pairs[start..].iter().take(30).cloned().collect::<Vec<_>>()
+        };
+        assert_eq!(value(&layer, 70), Some("48"), "dependent and resolved");
+
+        let back = crate::dxf::read::read(&bytes).unwrap();
+        assert_eq!(back.document.xrefs().len(), 1);
+        let xref = &back.document.xrefs()[0];
+        assert_eq!(xref.path, "parts/base.dwg");
+        assert_eq!(xref.kind, XrefKind::Overlay);
+        assert!(xref.unloaded, "DXF keeps the reference, not the snapshot");
+        assert_eq!(xref.layers[0].source, "Walls");
+        assert_eq!(back.document.insert_base(), Point::new(1.0, 2.0));
+        assert!(!back.document.visretain());
+        assert!(back.document.block(xref.block).unwrap().entities.is_empty());
+        let Entity::Insert(insert) = &back.document.objects()[0].entity else {
+            panic!("the reference's insert");
+        };
+        assert!(insert.is_xref);
+        assert_eq!(insert.insertion, Point::new(10.0, 5.0));
     }
 
     #[test]

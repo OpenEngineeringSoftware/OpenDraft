@@ -140,6 +140,10 @@ pub(crate) struct BlockData {
     /// block's picture, not a block the user named.
     pub anonymous: bool,
     pub is_xref: bool,
+    /// An overlaid reference (not included when the host is itself xrefed).
+    pub overlaid: bool,
+    /// The saved path (group 1); empty when the file has none.
+    pub path: String,
     /// The point an insert puts at its insertion point.
     pub base: [f64; 3],
     pub description: String,
@@ -167,8 +171,8 @@ pub(crate) fn read_block_header(
                    // An xref owns no entities, and the count is not stored for one.
     let owned = if is_xref || overlaid { 0 } else { s.data.bl()? };
     let base_point = s.data.bd3()?;
-    s.strings.text(text_limit)?; // xref path
-                                 // One non-zero byte per insert, ended by a zero byte.
+    let path = s.strings.text(text_limit)?;
+    // One non-zero byte per insert, ended by a zero byte.
     let mut inserts = 0u64;
     while s.data.rc()? != 0 {
         inserts += 1;
@@ -218,6 +222,8 @@ pub(crate) fn read_block_header(
         name,
         anonymous,
         is_xref,
+        overlaid,
+        path,
         base: base_point,
         description,
         entities,

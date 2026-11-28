@@ -61,7 +61,13 @@ impl Insert {
             budget: &mut budget,
             out: &mut out,
         };
-        self.expand(&Affine::IDENTITY, attrs, MAX_NESTING, &mut walk);
+        self.expand(
+            &Affine::IDENTITY,
+            attrs,
+            MAX_NESTING,
+            &mut walk,
+            self.is_xref,
+        );
         out
     }
 
@@ -77,8 +83,17 @@ impl Insert {
 
     /// Add the insert's pieces to `out`, stopping at `depth` levels of nesting
     /// or when `budget` objects have been visited (see [`MAX_EXPANSION`]), so
-    /// a block graph that fans out cannot run away.
-    fn expand(&self, outer: &Affine, attrs: &Attributes, depth: usize, walk: &mut Walk) {
+    /// a block graph that fans out cannot run away. `keep_layer_zero` is set
+    /// for an external reference's root: its own layer-0 objects stay on the
+    /// host's layer 0 instead of taking the insert's layer.
+    fn expand(
+        &self,
+        outer: &Affine,
+        attrs: &Attributes,
+        depth: usize,
+        walk: &mut Walk,
+        keep_layer_zero: bool,
+    ) {
         if depth == 0 {
             return;
         }
@@ -88,10 +103,13 @@ impl Insert {
                 return;
             }
             *walk.budget -= 1;
-            let child_attrs = inherited(&child.attrs, attrs, walk.look);
+            let mut child_attrs = inherited(&child.attrs, attrs, walk.look);
+            if keep_layer_zero && child.attrs.layer == LayerId::DEFAULT {
+                child_attrs.layer = LayerId::DEFAULT;
+            }
             match &child.entity {
                 Entity::Insert(nested) => {
-                    nested.expand(&map, &child_attrs, depth - 1, walk);
+                    nested.expand(&map, &child_attrs, depth - 1, walk, false);
                 }
                 // A constant attribute is drawn by every insert as its
                 // value; any other is drawn from the insert's own references.

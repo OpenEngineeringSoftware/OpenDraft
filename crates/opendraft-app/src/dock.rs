@@ -27,6 +27,7 @@ pub enum PanelTab {
     Canvas,
     Properties,
     Layers,
+    Xrefs,
     CommandLine,
     Assistant,
 }
@@ -38,6 +39,7 @@ impl PanelTab {
             PanelTab::Canvas => key!("Drawing"),
             PanelTab::Properties => key!("Properties"),
             PanelTab::Layers => key!("Layers"),
+            PanelTab::Xrefs => key!("External References"),
             PanelTab::CommandLine => key!("Command Line"),
             PanelTab::Assistant => key!("Assistant"),
         }
@@ -279,8 +281,9 @@ fn restore(dock: &mut DockState<PanelTab>, panel: PanelTab) {
             return;
         }
     }
-    // The assistant is a tab beside Layers, the tallest place in the column.
-    if panel == PanelTab::Assistant {
+    // The assistant and the External References palette are tabs beside
+    // Layers, the tallest place in the column.
+    if matches!(panel, PanelTab::Assistant | PanelTab::Xrefs) {
         if let Some((surface, node, _)) = dock.find_tab(&PanelTab::Layers) {
             dock.set_focused_node_and_surface((surface, node));
             dock.push_to_focused_leaf(panel);
@@ -455,6 +458,27 @@ mod tests {
     #[test]
     fn default_layout_puts_properties_left_and_the_command_line_above_layers() {
         assert_default_arrangement(&default_layout());
+    }
+
+    #[test]
+    fn the_external_references_panel_docks_beside_layers() {
+        let mut dock = default_layout();
+        let mut places = Places::default();
+        apply(
+            &mut dock,
+            &mut places,
+            LayoutRequest::Toggle(PanelTab::Xrefs),
+        );
+        assert_eq!(
+            node_of(&dock, PanelTab::Xrefs),
+            node_of(&dock, PanelTab::Layers)
+        );
+        apply(
+            &mut dock,
+            &mut places,
+            LayoutRequest::Toggle(PanelTab::Xrefs),
+        );
+        assert!(dock.find_tab(&PanelTab::Xrefs).is_none());
     }
 
     #[test]

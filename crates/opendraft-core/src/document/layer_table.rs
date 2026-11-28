@@ -31,10 +31,15 @@ impl Document {
         self.current_layer
     }
 
-    /// Make `id` the layer new objects go on. Ignores unknown ids.
-    pub fn set_current_layer(&mut self, id: LayerId) {
-        if self.layer_positions.contains_key(&id) {
+    /// Make `id` the layer new objects go on. Ignores unknown ids and an
+    /// external reference's bound layer, as AutoCAD does. Returns whether it
+    /// became the current layer.
+    pub fn set_current_layer(&mut self, id: LayerId) -> bool {
+        if self.layer_positions.contains_key(&id) && self.xref_layer_owner(id).is_none() {
             self.current_layer = id;
+            true
+        } else {
+            false
         }
     }
 
@@ -127,6 +132,10 @@ impl Document {
             Some(crate::key!("Layer 0 cannot be deleted"))
         } else if id == self.current_layer {
             Some(crate::key!("The current layer cannot be deleted"))
+        } else if self.xref_layer_owner(id).is_some() {
+            Some(crate::key!(
+                "An external reference layer cannot be deleted; detach the reference."
+            ))
         } else if self.layer_in_use(id) {
             Some(crate::key!("A layer with objects on it cannot be deleted"))
         } else {

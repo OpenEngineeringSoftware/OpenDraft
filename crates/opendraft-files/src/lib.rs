@@ -13,6 +13,7 @@ mod native;
 mod plot;
 mod plot_png;
 mod template;
+mod xref;
 
 use std::fs;
 use std::io::Write;
@@ -30,6 +31,10 @@ pub use plot::{pdf, pdf_filter, plot_cancellable, svg, svg_filter};
 pub use plot_png::{png, png_size, rgba_part, PngError};
 pub use template::{
     is_template, template_filter, template_path, TemplateFormat, TEMPLATE_EXTENSION,
+};
+pub use xref::{
+    classify, format_saved_path, plan_xref, read_source, resolve, stamp, XrefLimits, XrefLoadError,
+    XrefPathError, XrefPlanError, XrefPlanRequest, XrefSource,
 };
 
 /// "1 object", "2 objects": a count and a noun for a warning.

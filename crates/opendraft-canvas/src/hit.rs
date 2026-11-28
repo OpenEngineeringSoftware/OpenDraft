@@ -68,12 +68,20 @@ pub fn distance_to_entity(entity: &Entity, p: Point) -> f64 {
             .iter()
             .map(|piece| distance_to_entity(piece, p))
             .fold(f64::INFINITY, f64::min),
-        // A block is picked by what it draws.
-        Entity::Insert(i) => i
-            .picture()
-            .iter()
-            .map(|piece| distance_to_entity(piece, p))
-            .fold(f64::INFINITY, f64::min),
+        // A block is picked by what it draws; an empty one (an unloaded
+        // external reference, say) by its insertion point.
+        Entity::Insert(i) => {
+            let d = i
+                .picture()
+                .iter()
+                .map(|piece| distance_to_entity(piece, p))
+                .fold(f64::INFINITY, f64::min);
+            if d.is_finite() {
+                d
+            } else {
+                distance_to_entity(&Entity::Point { at: i.insertion }, p)
+            }
+        }
         // The area the text fills stands for the glyphs; empty space in a
         // bigger box is not picked, so what is drawn there still can be.
         // A template is picked by its tag, as text is.

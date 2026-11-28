@@ -161,6 +161,10 @@ pub const TABLE: &[(&str, AutomationPolicy, CommandEffect)] = &[
     ("block.attedit_line", InteractiveInApp, Mutation),
     ("block.attsync", InteractiveInApp, Mutation),
     ("block.field", InteractiveInApp, Mutation),
+    // External references: attaching and editing one changes the drawing.
+    ("xref.attach", InteractiveInApp, Mutation),
+    ("xref.command_line", InteractiveInApp, Mutation),
+    ("xref.palette", Denied, Ui),
     ("block.field_line", InteractiveInApp, Mutation),
     ("block.updatefield", InteractiveInApp, Mutation),
     ("block.purge", InteractiveInApp, Ui),

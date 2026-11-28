@@ -78,6 +78,8 @@ pub enum DocumentError {
     /// A block reference carries dynamic values its block cannot take, with the
     /// reason.
     BadDynamicState(EntityId, String),
+    /// An external reference that could not exist, with the reason.
+    BadXref(String),
 }
 
 impl fmt::Display for DocumentError {
@@ -150,6 +152,7 @@ impl fmt::Display for DocumentError {
             Self::BadDynamicState(object, why) => {
                 write!(f, "object {} has an invalid dynamic state: {why}", object.0)
             }
+            Self::BadXref(why) => write!(f, "{why}"),
         }
     }
 }
@@ -223,6 +226,7 @@ impl Document {
         self.validate_mleaders()?;
         self.validate_leaders()?;
         self.validate_dim_styles()?;
+        self.validate_xrefs()?;
         self.validate_blocks()?;
         self.validate_attributes()?;
         self.validate_layouts()

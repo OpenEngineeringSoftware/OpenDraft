@@ -88,7 +88,7 @@ More in `docs/ARCHITECTURE.md`, "Hatches".
 - Fields (built: Date, Filename, Object and the six `DWGPROPS` summary fields, through `FIELD`, the text editor and `-FIELD`): CreateDate, SaveDate, LastSavedBy, PlotDate, file size and custom document properties; document properties in DXF and DWG (neither is read or written); DXF `FIELD` objects; fields refreshed inside nested blocks; fields in dimension and multileader text; `FIELDDISPLAY`.
 - Attributes and blocks in DXF are checked with ezdxf only, not AutoCAD.
 - Picture cache for block references (not worth it on the evidence so far: see `docs/ARCHITECTURE.md`).
-- External references (xrefs).
+- External references: the model, validation, `.odraft` persistence, `-XREF`/`XATTACH` (attach, overlay, list, reload, unload, detach, path, one undo step each), the docked External References palette with status and row actions, the Insert tab's Reference panel, screen-only markers for unloaded references, and the DXF and DWG import/export halves (empty xref blocks with paths and flags, layer flags, `$INSBASE`/`$VISRETAIN`; DWG paths and overlay bits) are built. Not built: Bind/XBIND, XCLIP/`SPATIAL_FILTER`, nested xrefs, demand loading, xref fading, URL/network paths, cross-drawing clipboard of a reference, xref-dependent style/linetype records as first-class tables, `XREFTYPE`/`REFPATHTYPE`/`VISRETAIN` as settable system variables, the Attach dialog (XATTACH asks at the command line), and AutoCAD conformance checks. See `docs/ARCHITECTURE.md`, "External references".
 
 ## Layers, linetypes and properties
 

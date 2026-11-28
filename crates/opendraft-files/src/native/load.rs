@@ -2,14 +2,15 @@
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use opendraft_core::{
-    Attributes, Document, Entity, EntityId, Layer, LayerId, LayoutId, LinetypeId, Lineweight,
-    Object,
+    Attributes, BlockDef, Document, Entity, EntityId, Layer, LayerId, LayoutId, LinetypeId,
+    Lineweight, Object,
 };
 
-use super::block::{load_blocks, Blocks};
-use super::entity::invalid;
+use super::block::{load_blocks_with, Blocks};
+use super::entity::{from_point, invalid};
 use super::layout::{into_layouts, LayoutDto};
 use super::{attr_from_dto, text, Color, DrawingDto};
 use crate::FileError;
@@ -67,11 +68,46 @@ impl DrawingDto {
         self.point_style.load(&mut document);
         self.modify_settings.load(&mut document);
         self.ccs.load(&mut document)?;
-        let blocks = load_blocks(&self.blocks, &dim_styles.pool, |l| layer_ids.contains(&l))?;
+        // Local definitions first: a root's snapshot inserts them, and they
+        // are not host blocks.
+        let mut local_map: Blocks = Blocks::new();
+        let mut local_blocks: Vec<Vec<Arc<BlockDef>>> = Vec::new();
+        for xref in &self.xrefs {
+            let locals = load_blocks_with(
+                xref.local_blocks(),
+                &dim_styles.pool,
+                |l| layer_ids.contains(&l),
+                false,
+                &Blocks::new(),
+            )?;
+            for block in &locals {
+                if local_map.insert(block.id.0, block.clone()).is_some() {
+                    return invalid(format!(
+                        "block {} belongs to two external references",
+                        block.id.0
+                    ));
+                }
+            }
+            local_blocks.push(locals);
+        }
+        let blocks = load_blocks_with(
+            &self.blocks,
+            &dim_styles.pool,
+            |l| layer_ids.contains(&l),
+            true,
+            &local_map,
+        )?;
         let by_id: Blocks = blocks.iter().map(|b| (b.id.0, b.clone())).collect();
+        let mut records = Vec::with_capacity(self.xrefs.len());
+        for (xref, locals) in self.xrefs.into_iter().zip(local_blocks) {
+            records.push(xref.into_record(&by_id, locals)?);
+        }
         for block in blocks {
             document.push_block(block);
         }
+        document.set_xrefs(records);
+        document.set_insert_base(from_point(self.insert_base)?);
+        document.set_visretain(self.visretain);
         document.reserve_block_ids(self.next_block_id);
         document.reserve_attribute_definition_ids(self.next_attribute_definition_id);
         let layout_ids: HashSet<u64> = self.layouts.iter().map(LayoutDto::id).collect();

@@ -3,7 +3,7 @@
 use opendraft_core::block::attribute_draft::{DefinitionDraft, EditorDraft};
 use opendraft_core::block::block_draft::BlockDraft;
 use opendraft_core::block::{DataField, FieldDraft};
-use opendraft_core::{overkill, EntityId, MText, Point};
+use opendraft_core::{overkill, EntityId, MText, Point, XrefAttachDraft, XrefPlan};
 
 /// The button that closed the Block Definition dialog. The pick buttons hide
 /// it while the user picks in the drawing, and it opens again.
@@ -39,6 +39,12 @@ pub enum Reply {
     Field(Box<DataField>),
     /// The Field dialog, closed to pick an object for an object field.
     FieldPick(Box<FieldDraft>),
+    /// The source was read and planned: what to apply.
+    XrefPlan(Box<XrefPlan>),
+    /// The source could not be read or planned, worded for the user.
+    XrefFailed(String),
+    /// The Attach External Reference dialog, accepted.
+    XrefAttach(Box<XrefAttachDraft>),
     /// The label of a chosen keyword.
     Keyword(String),
     Selection(Vec<EntityId>),

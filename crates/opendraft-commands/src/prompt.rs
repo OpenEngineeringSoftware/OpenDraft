@@ -7,7 +7,7 @@ use std::sync::Arc;
 use opendraft_core::block::attribute_draft::{DefinitionDraft, EditorDraft};
 use opendraft_core::block::block_draft::BlockDraft;
 use opendraft_core::block::FieldDraft;
-use opendraft_core::{overkill, Entity, EntityId, MText, Point};
+use opendraft_core::{overkill, Entity, EntityId, MText, Point, XrefAttachDraft, XrefLoadRequest};
 
 pub use crate::answer::{Answer, NumberOrPoint, Picked, Swept};
 pub use crate::reply::{BlockDialogButton, Reply};
@@ -317,6 +317,12 @@ pub enum Wants {
     BlockDialog,
     /// The Field dialog, opened on [`Prompt::field_dialog`].
     FieldDialog,
+    /// An external reference's source is being read and planned; the answer
+    /// is a plan or the reason it failed.
+    XrefLoad,
+    /// The Attach External Reference dialog, opened on
+    /// [`Prompt::xref_attach`].
+    XrefAttachDialog,
 }
 
 /// The default a prompt offers, left as a value so the UI can write it in the
@@ -379,6 +385,10 @@ pub struct Prompt {
     pub block_dialog: Option<Box<BlockDraft>>,
     /// For [`Wants::FieldDialog`]: what it opens with.
     pub field_dialog: Option<Box<FieldDraft>>,
+    /// For [`Wants::XrefLoad`]: the source to read and plan.
+    pub xref_load: Option<Box<XrefLoadRequest>>,
+    /// For [`Wants::XrefAttachDialog`]: what it opens with.
+    pub xref_attach: Option<Box<XrefAttachDraft>>,
 }
 
 impl Prompt {
@@ -411,6 +421,8 @@ impl Prompt {
             attribute_editor: None,
             block_dialog: None,
             field_dialog: None,
+            xref_load: None,
+            xref_attach: None,
         }
     }
 }

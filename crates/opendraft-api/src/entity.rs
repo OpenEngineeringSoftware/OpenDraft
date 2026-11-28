@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 pub use crate::entity_bounds::BoundsDto;
 use crate::entity_dimensions;
 use crate::entity_leaders;
-use crate::limits::{POINTS_PER_ENTITY_MAX, STRING_BYTES_MAX};
+use crate::limits::STRING_BYTES_MAX;
 use crate::WireId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -136,6 +136,9 @@ pub enum GeometryDto {
         /// The values of the block's attributes, in definition order.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attributes: Vec<AttributeValueDto>,
+        /// True when the insert places an external reference's root.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        xref: bool,
     },
     /// A template text in a block: what an insert asks for and shows.
     AttributeDefinition {
@@ -379,25 +382,7 @@ pub fn geometry_dto(entity: &Entity) -> GeometryDto {
         },
         Entity::MText(m) => crate::entity_text::mtext(m),
         Entity::Text(t) => crate::entity_text::single_line(t),
-        Entity::Insert(i) => GeometryDto::Insert {
-            block_id: i.block.id.0.to_string(),
-            block_name: bounded(&i.block.name).0,
-            insertion: i.insertion.into(),
-            scale_x: num(i.scale_x),
-            scale_y: num(i.scale_y),
-            rotation: num(i.rotation),
-            attributes: i
-                .attributes
-                .iter()
-                .take(POINTS_PER_ENTITY_MAX)
-                .map(|r| AttributeValueDto {
-                    tag: bounded(&r.tag).0,
-                    value: bounded(&r.value.display()).0,
-                    invisible: r.flags.invisible(),
-                    field: r.value.has_fields(),
-                })
-                .collect(),
-        },
+        Entity::Insert(i) => crate::entity_insert::geometry(i),
         Entity::AttributeDefinition(d) => GeometryDto::AttributeDefinition {
             tag: bounded(&d.tag).0,
             prompt: bounded(&d.prompt).0,

@@ -27,6 +27,7 @@ pub(crate) fn placed(
         rotation,
         attributes,
         dynamic: None,
+        is_xref: false,
     }))
 }
 
@@ -48,7 +49,12 @@ const MAX_OFFERED: usize = 20;
 /// The block names to pick from at the name prompt, in alphabetical order
 /// ignoring case.
 fn offered_names(doc: &opendraft_core::Document) -> Vec<String> {
-    let mut names: Vec<String> = doc.blocks().iter().map(|b| b.name.clone()).collect();
+    let mut names: Vec<String> = doc
+        .blocks()
+        .iter()
+        .filter(|b| doc.xref(b.id).is_none())
+        .map(|b| b.name.clone())
+        .collect();
     names.sort_by_key(|n| n.to_lowercase());
     names.truncate(MAX_OFFERED);
     names
@@ -58,7 +64,12 @@ fn offered_names(doc: &opendraft_core::Document) -> Vec<String> {
 /// command.
 pub(crate) fn choose_block(ed: &Editor) -> Result<Option<Arc<BlockDef>>, Cancelled> {
     let (newest, names) = ed.read(|doc| {
-        let newest = doc.blocks().last().map(|b| b.name.clone());
+        let newest = doc
+            .blocks()
+            .iter()
+            .filter(|b| doc.xref(b.id).is_none())
+            .last()
+            .map(|b| b.name.clone());
         (newest, offered_names(doc))
     })?;
     let Some(newest) = newest else {
@@ -83,9 +94,19 @@ pub(crate) fn choose_block(ed: &Editor) -> Result<Option<Arc<BlockDef>>, Cancell
             NameAnswer::Name(name) => name,
         };
         let lookup = name.clone();
-        match ed.read(move |doc| doc.block_named(&lookup).cloned())? {
-            Some(block) => return Ok(Some(block)),
-            None => ed.say(Wording::new(
+        match ed.read(move |doc| {
+            let found = doc
+                .block_named(&lookup)
+                .filter(|b| doc.xref(b.id).is_none())
+                .cloned();
+            let xref = doc.xref_by_name(&lookup).is_some();
+            (found, xref)
+        })? {
+            (Some(block), _) => return Ok(Some(block)),
+            (None, true) => ed.say(key!(
+                "That is an external reference; use XATTACH or Reload instead of INSERT."
+            )),
+            (None, false) => ed.say(Wording::new(
                 key!("Block \"%{name}\" not found."),
                 &[("name", &name)],
             )),
@@ -112,7 +133,11 @@ impl crate::state::AppState {
         let name = name.to_owned();
         self.start_command("INSERT", move |ed| {
             let lookup = name.clone();
-            match ed.read(move |doc| doc.block_named(&lookup).cloned())? {
+            match ed.read(move |doc| {
+                doc.block_named(&lookup)
+                    .filter(|b| doc.xref(b.id).is_none())
+                    .cloned()
+            })? {
                 Some(block) => place_block(ed, block),
                 None => {
                     ed.say(Wording::new(

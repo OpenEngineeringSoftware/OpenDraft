@@ -4,10 +4,11 @@
 //! entry past the limit instead of collecting them all first. The limits are
 //! far above any real drawing.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
 
-use serde::de::{Deserialize, Deserializer, Error, SeqAccess, Visitor};
+use serde::de::{Deserialize, Deserializer, Error, MapAccess, SeqAccess, Visitor};
 
 /// Objects in the drawing.
 pub(super) const OBJECTS: usize = 5_000_000;
@@ -111,6 +112,42 @@ pub(super) fn field_items<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
 
 pub(super) fn cached_bytes<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
     bounded(d, CACHED_BYTES, "bytes of cached field data")
+}
+
+/// A map of at most [`TABLE_ROWS`] entries, naming counts (a report's skipped
+/// kinds).
+struct BoundedMap {
+    max: usize,
+    what: &'static str,
+}
+
+impl<'de> Visitor<'de> for BoundedMap {
+    type Value = BTreeMap<String, u64>;
+
+    fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "a map of at most {} {}", self.max, self.what)
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        let mut out = BTreeMap::new();
+        while let Some((key, value)) = map.next_entry::<String, u64>()? {
+            if out.len() >= self.max {
+                return Err(A::Error::custom(format!(
+                    "the file has more than {} {}",
+                    self.max, self.what
+                )));
+            }
+            out.insert(key, value);
+        }
+        Ok(out)
+    }
+}
+
+pub(super) fn map_rows<'de, D: Deserializer<'de>>(d: D) -> Result<BTreeMap<String, u64>, D::Error> {
+    d.deserialize_map(BoundedMap {
+        max: TABLE_ROWS,
+        what: "counted kinds",
+    })
 }
 
 #[cfg(test)]

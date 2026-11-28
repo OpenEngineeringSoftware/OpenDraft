@@ -49,6 +49,8 @@ Defaults that only make sense for files written by an earlier build are residue 
 
 Keep as optional: sparse per-entity flags (section 1 note), `layouts`, `blocks`, `text_styles`, the table `TableDto`s, so a plain drawing stays small, once rule 1 is decided.
 
+External references add `insert_base` (absent means the origin), `visretain` (absent means true) and `xrefs` (absent means none), plus `"xref": true` on an insert. They are additive, but an older reader ignores `xrefs` and would load the root as an ordinary block, so a stable version 1 must include them before `CURRENT_VERSION` is raised.
+
 ## 6. Smaller points
 
 - Tuples and fixed arrays in the schema (`jog: Option<(PointDto, PointDto)>`, `[f64; 2]`, `[bool; 2]`, `[u8; 3]`) are positional and unreadable in a diff-friendly format; prefer small named structs for anything not a point or colour.

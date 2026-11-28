@@ -147,6 +147,10 @@ impl Document {
     pub fn extract(&self, ids: &[EntityId]) -> Document {
         let mut out = Document::default();
         out.restore_tables(&self.tables());
+        // A copied drawing never carries an external reference: the
+        // clipboard refuses one, and an unrelated root would be pasted as an
+        // ordinary block.
+        out.blocks.retain(|b| self.xref(b.id).is_none());
         out.current_layer = self.current_layer;
         out.units = self.units;
         let objects = ids

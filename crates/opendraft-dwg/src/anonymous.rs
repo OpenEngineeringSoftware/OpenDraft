@@ -62,6 +62,8 @@ mod tests {
             name: name.into(),
             anonymous,
             is_xref: false,
+            overlaid: false,
+            path: String::new(),
             base: [0.0; 3],
             description: String::new(),
             entities,

@@ -14,10 +14,8 @@ use super::units::header as units_header;
 use crate::{Encoded, FileError};
 use opendraft_core::aci::{aci_rgb, nearest_aci};
 
-/// Characters DXF forbids in layer names.
-const FORBIDDEN: &[char] = &[
-    '<', '>', '/', '\\', '"', ':', ';', '?', '*', '|', '=', '`', ',',
-];
+/// How names are written.
+mod name;
 
 pub(super) struct Out {
     pub(super) text: String,
@@ -57,22 +55,7 @@ impl Out {
 /// A layer or linetype name as DXF wants it: forbidden characters replaced.
 /// Latin-1 letters stay (the file is written in code page 1252, see
 /// `latin1`); anything beyond that is written as `\U+XXXX`.
-pub(super) fn dxf_name(name: &str) -> String {
-    let mut out = String::new();
-    for c in name.chars() {
-        if FORBIDDEN.contains(&c) || c.is_control() {
-            out.push('_');
-        } else if u32::from(c) < 0x100 {
-            out.push(c);
-        } else {
-            let mut buffer = [0u16; 2];
-            for unit in c.encode_utf16(&mut buffer) {
-                out.push_str(&format!("\\U+{unit:04X}"));
-            }
-        }
-    }
-    out
-}
+pub(super) use name::{dxf_layer_name, dxf_name};
 
 /// The text as the single bytes of code page 1252 that R12 files use. Every
 /// character is below U+0100 by now: names beyond that were escaped.

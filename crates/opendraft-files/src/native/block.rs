@@ -64,7 +64,13 @@ fn is_zero(n: &u8) -> bool {
 }
 
 impl BlockDto {
-    pub(super) fn from_block(block: &BlockDef, styles: &mut StylePool) -> Result<Self, FileError> {
+    /// `from_block`, with `known` naming the blocks its inserts may refer to
+    /// that are not in the block table (an xref's local definitions).
+    pub(super) fn from_block_in(
+        block: &BlockDef,
+        styles: &mut StylePool,
+        known: &Blocks,
+    ) -> Result<Self, FileError> {
         let objects = block
             .entities
             .iter()
@@ -76,7 +82,7 @@ impl BlockDto {
                     linetype: attr_to_dto(&e.attrs.linetype, |id| id.0),
                     lineweight: attr_to_dto(&e.attrs.lineweight, |w| w.0),
                     scale: super::linetype::ScaleDto::of(&e.attrs),
-                    entity: EntityDto::from_entity(&e.entity, styles)?,
+                    entity: EntityDto::from_entity_in(&e.entity, styles, known)?,
                 })
             })
             .collect::<Result<_, FileError>>()?;
@@ -113,19 +119,32 @@ impl BlockDto {
     }
 }
 
-/// Every definition, resolved, in the file's order. `layer_ok` says whether
-/// a layer id exists.
-pub(super) fn load_blocks(
+/// `load_blocks`, with the host table's name rules (`strict_names` false for
+/// an xref's local definitions, whose names may contain `|`), and `known`
+/// naming definitions outside `dtos` that an insert may still refer to.
+pub(super) fn load_blocks_with(
     dtos: &[BlockDto],
     dim_styles: &[DimStyle],
     layer_ok: impl Fn(u64) -> bool,
+    strict_names: bool,
+    known: &Blocks,
 ) -> Result<Vec<Arc<BlockDef>>, FileError> {
     let mut by_id = HashMap::new();
     for dto in dtos {
         if by_id.insert(dto.id, dto).is_some() {
             return invalid(format!("block {} appears twice", dto.id));
         }
-        if let Some(why) = block_name_problem(&dto.name) {
+        if known.contains_key(&dto.id) {
+            return invalid(format!("block {} appears twice", dto.id));
+        }
+        let bad = if strict_names {
+            block_name_problem(&dto.name)
+        } else if dto.name.trim().is_empty() || dto.name.chars().count() > 255 {
+            Some("a block name must be 1 to 255 characters")
+        } else {
+            None
+        };
+        if let Some(why) = bad {
             return invalid(format!("block \"{}\": {why}", dto.name));
         }
     }
@@ -134,7 +153,7 @@ pub(super) fn load_blocks(
     let mut sizes = HashMap::new();
     for dto in dtos {
         resolve(
-            dto.id, &by_id, &layer_ok, dim_styles, &mut done, &mut path, &mut sizes,
+            dto.id, &by_id, &layer_ok, dim_styles, &mut done, &mut path, &mut sizes, known,
         )?;
     }
     Ok(dtos
@@ -143,6 +162,9 @@ pub(super) fn load_blocks(
         .collect())
 }
 
+// A block's resolution threads the file's lookup, the blocks read so far and
+// the outsider map; splitting it would only move the same state around.
+#[allow(clippy::too_many_arguments)]
 fn resolve(
     id: u64,
     by_id: &HashMap<u64, &BlockDto>,
@@ -151,8 +173,12 @@ fn resolve(
     done: &mut Blocks,
     path: &mut Vec<u64>,
     sizes: &mut HashMap<BlockId, usize>,
+    known: &Blocks,
 ) -> Result<Arc<BlockDef>, FileError> {
     if let Some(block) = done.get(&id) {
+        return Ok(block.clone());
+    }
+    if let Some(block) = known.get(&id) {
         return Ok(block.clone());
     }
     let Some(dto) = by_id.get(&id) else {
@@ -169,11 +195,22 @@ fn resolve(
     path.push(id);
     for object in &dto.objects {
         if let EntityDto::Insert { block, .. } = &object.entity {
-            resolve(*block, by_id, layer_ok, dim_styles, done, path, sizes)?;
+            if by_id.contains_key(block) {
+                resolve(
+                    *block, by_id, layer_ok, dim_styles, done, path, sizes, known,
+                )?;
+            } else if !known.contains_key(block) {
+                return invalid(format!(
+                    "block \"{}\" inserts block {block}, which does not exist",
+                    dto.name
+                ));
+            }
         }
     }
     path.pop();
     let mut entities = Vec::with_capacity(dto.objects.len());
+    let mut resolved = known.clone();
+    resolved.extend(done.iter().map(|(id, block)| (*id, block.clone())));
     let object_ids = dto.object_ids()?;
     let unique: HashSet<BlockObjectId> = object_ids.iter().copied().collect();
     if unique.len() != object_ids.len() {
@@ -208,7 +245,7 @@ fn resolve(
         object.scale.apply(&mut attrs);
         entities.push(BlockEntity::new(
             object_id,
-            object.entity.to_entity(done, dim_styles)?,
+            object.entity.to_entity(&resolved, dim_styles)?,
             attrs,
         ));
     }
@@ -232,6 +269,8 @@ fn resolve(
 }
 
 /// The entity for an insert's fields, resolving its block in `blocks`.
+// One field per part of the DTO; bundling them would not make the call safer.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn insert_entity(
     blocks: &Blocks,
     block: u64,
@@ -240,6 +279,7 @@ pub(super) fn insert_entity(
     rotation: f64,
     attributes: &[AttributeReferenceDto],
     dynamic: Option<&DynamicStateDto>,
+    is_xref: bool,
 ) -> Result<Entity, FileError> {
     let Some(def) = blocks.get(&block) else {
         return invalid(format!(
@@ -257,6 +297,7 @@ pub(super) fn insert_entity(
             .map(AttributeReferenceDto::to_reference)
             .collect::<Result<_, _>>()?,
         dynamic: dynamic.map(|d| d.to_state().map(Box::new)).transpose()?,
+        is_xref,
     };
     if let Some(state) = insert.dynamic.as_deref() {
         let held = match &def.dynamic {

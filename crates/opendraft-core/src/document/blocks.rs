@@ -102,6 +102,10 @@ impl Document {
     /// the base point is the origin, as AutoCAD's Block Editor shows it.
     /// `None` for an unknown block.
     pub fn block_editor_document(&self, id: BlockId) -> Option<Document> {
+        // An external reference is edited in its source drawing.
+        if self.is_xref_block(id) {
+            return None;
+        }
         let block = self.block(id)?.clone();
         let mut doc = Document {
             objects: Vec::new(),
@@ -137,6 +141,10 @@ impl Document {
     /// is the block's. The caller keeps the base point for `$INSBASE`. `None`
     /// for an unknown block.
     pub fn block_as_drawing(&self, id: BlockId) -> Option<Document> {
+        // Writing an external reference out as a block would flatten it.
+        if self.is_xref_block(id) {
+            return None;
+        }
         let block = self.block(id)?.clone();
         let mut doc = Document {
             objects: Vec::new(),
@@ -209,8 +217,16 @@ impl Document {
             mleader_styles: self.mleader_styles.clone(),
             next_mleader_style_id: self.next_mleader_style_id,
             current_mleader_style: self.current_mleader_style,
-            blocks: self.blocks.clone(),
+            blocks: self
+                .blocks
+                .iter()
+                .filter(|b| self.xref(b.id).is_none())
+                .cloned()
+                .collect(),
             next_block_id: self.next_block_id,
+            xrefs: Vec::new(),
+            insert_base: self.insert_base,
+            visretain: self.visretain,
             block_editor_dynamic: None,
             next_attribute_definition_id: self.next_attribute_definition_id,
             linetypes: self.linetypes.clone(),

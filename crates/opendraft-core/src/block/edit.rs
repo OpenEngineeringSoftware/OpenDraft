@@ -33,6 +33,7 @@ impl Insert {
             rotation: arc::normalize(rotation),
             attributes: self.attributes.clone(),
             dynamic: self.dynamic.clone(),
+            is_xref: self.is_xref,
         }
     }
 

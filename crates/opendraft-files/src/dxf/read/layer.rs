@@ -46,6 +46,9 @@ impl Importer {
             plot: record.int(290).is_none_or(|v| v != 0),
         };
         self.layers.insert(layer.name.to_lowercase(), id);
+        if flags & 16 != 0 {
+            self.blocks.dependent_layers.insert(id.0);
+        }
         self.document.replace_layer(layer);
     }
 }

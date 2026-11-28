@@ -11,6 +11,7 @@ pub mod convert;
 pub mod entity;
 mod entity_bounds;
 mod entity_dimensions;
+mod entity_insert;
 mod entity_leaders;
 mod entity_text;
 pub mod envelope;
