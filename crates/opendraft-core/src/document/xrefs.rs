@@ -37,6 +37,14 @@ impl Document {
         self.xref(insert.block.id)
     }
 
+    /// Whether the insert places an external reference whose clip is on, so
+    /// what it draws is less than its whole snapshot.
+    pub fn insert_is_clipped(&self, insert: &Insert) -> bool {
+        self.xref(insert.block.id)
+            .and_then(|xref| xref.clip.as_ref())
+            .is_some_and(|clip| clip.enabled)
+    }
+
     /// The record the object is an insert of, if any.
     pub fn xref_for_object(&self, id: EntityId) -> Option<&XrefDef> {
         match self.get(id)? {

@@ -30,8 +30,8 @@ pub use hit::{distance_to_entity, pick};
 pub use layer_cache::{CacheConfig, CacheMode, CacheStats, Motion, Render};
 pub use select::{select, select_in, Region};
 pub use snap::{
-    candidates, snap, snap_all, Acquired, Guide, Origin, Probe, SnapId, SnapKind, SnapModes,
-    SnapOverride, SnapPoint, Track, TrackInput, Tracking,
+    candidates, snap, snap_all, snap_all_in, Acquired, Guide, Origin, Probe, SnapId, SnapKind,
+    SnapModes, SnapOverride, SnapPoint, Track, TrackInput, Tracking,
 };
 pub use snap_axis::Ortho;
 pub use view::{
