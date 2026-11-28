@@ -357,8 +357,30 @@ mod tests {
         handles.handle(4, 0x22);
         let b = Buffers::new(&data, &strings, &handles);
         let block = read_block_header(&mut b.streams(), BASE, &DwgLimits::default()).unwrap();
-        assert!(block.is_xref && block.entities.is_empty());
+        assert!(block.is_xref && !block.overlaid && block.entities.is_empty());
+        assert_eq!(block.path, "..\\Sketch.dwg");
         assert_eq!(block.layout, Some(DwgHandle(0x22)));
+    }
+
+    #[test]
+    fn an_overlaid_xref_keeps_its_overlay_bit_and_path() {
+        let mut data = BitWriter::new();
+        data.bs(0)
+            .bit(false)
+            .bit(false)
+            .bit(true)
+            .bit(true)
+            .bit(true);
+        data.bd3([0.0; 3]).rc(0).bl(0).bs(0).bit(true).rc(1);
+        let mut strings = BitWriter::new();
+        strings.text("Overlay").text("Site.dwg").text("");
+        let mut handles = BitWriter::new();
+        handles.handle(5, 0).handle(3, 0x20).handle(3, 0x21);
+        handles.handle(4, 0x22);
+        let b = Buffers::new(&data, &strings, &handles);
+        let block = read_block_header(&mut b.streams(), BASE, &DwgLimits::default()).unwrap();
+        assert!(block.is_xref && block.overlaid && block.entities.is_empty());
+        assert_eq!(block.path, "Site.dwg");
     }
 
     #[test]
