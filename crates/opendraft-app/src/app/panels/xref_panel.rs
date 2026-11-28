@@ -95,7 +95,7 @@ impl PanelViewer<'_> {
         ui.horizontal_wrapped(|ui| {
             if ui.button(key!("Attach")).clicked() {
                 self.state
-                    .start_command("XATTACH", |ed| xref_cmd::attach(ed, XrefKind::Attach));
+                    .start_command("XATTACH", |ed| xref_cmd::attach(ed, XrefKind::Attach, true));
             }
             if ui
                 .add_enabled(selected.is_some(), egui::Button::new(key!("Reload")))

@@ -25,7 +25,7 @@ pub fn commands() -> Vec<Command<AppState>> {
         .checked(|s| s.is_running("-XREF"))
         .transparent(),
         Command::new("xref.attach", "XATTACH", |s: &mut AppState| {
-            s.start_command("XATTACH", |ed| attach(ed, XrefKind::Attach))
+            s.start_command("XATTACH", |ed| attach(ed, XrefKind::Attach, true))
         })
         .checked(|s| s.is_running("XATTACH"))
         .transparent(),
@@ -62,8 +62,8 @@ fn command_line(ed: &mut Editor) -> Result<(), Cancelled> {
         "Path" => edit_path(ed),
         "Unload" => unload(ed),
         "Reload" => reload(ed),
-        "Overlay" => attach(ed, XrefKind::Overlay),
-        _ => attach(ed, XrefKind::Attach),
+        "Overlay" => attach(ed, XrefKind::Overlay, false),
+        _ => attach(ed, XrefKind::Attach, false),
     }
 }
 
@@ -130,8 +130,39 @@ fn host_dir(ed: &Editor) -> Option<String> {
         .and_then(|dir| dir.0.clone())
 }
 
-pub(crate) fn attach(ed: &mut Editor, kind: XrefKind) -> Result<(), Cancelled> {
+pub(crate) fn attach(ed: &mut Editor, kind: XrefKind, ask_type: bool) -> Result<(), Cancelled> {
     let dir = host_dir(ed);
+    let (kind, path_type) = if ask_type {
+        let kind = match ed
+            .get_keyword(
+                Options::<String>::new(key!("Enter reference type [Attach/Overlay] <Attach>"))
+                    .keyword("Attach", "A")
+                    .keyword("Overlay", "O")
+                    .default("Attach".to_owned()),
+            )?
+            .to_ascii_lowercase()
+        {
+            typed if typed.starts_with('o') => XrefKind::Overlay,
+            _ => XrefKind::Attach,
+        };
+        let path_type = match ed
+            .get_keyword(
+                Options::<String>::new(key!("Enter path type [Full/Relative/NoPath] <Relative>"))
+                    .keyword("Full", "F")
+                    .keyword("Relative", "R")
+                    .keyword("NoPath", "N")
+                    .default("Relative".to_owned()),
+            )?
+            .to_ascii_lowercase()
+        {
+            typed if typed.starts_with('f') => XrefPathType::Full,
+            typed if typed.starts_with('n') => XrefPathType::NoPath,
+            _ => XrefPathType::Relative,
+        };
+        (kind, path_type)
+    } else {
+        (kind, XrefPathType::Relative)
+    };
     let source_path = ed.get_string(Options::<String>::new(key!(
         "Enter name of file to attach:"
     )))?;
@@ -153,7 +184,7 @@ pub(crate) fn attach(ed: &mut Editor, kind: XrefKind) -> Result<(), Cancelled> {
         block: None,
         name,
         source_path,
-        path_type: XrefPathType::Relative,
+        path_type,
         kind,
         host_dir: dir,
     };
@@ -374,7 +405,7 @@ mod tests {
         std::fs::write(&path, NativeFormat.write(&source).unwrap().bytes).unwrap();
 
         let mut state = AppState::new();
-        state.start_command("XATTACH", |ed| attach(ed, XrefKind::Attach));
+        state.start_command("XATTACH", |ed| attach(ed, XrefKind::Attach, false));
         state.settle_command();
         state.cmd_submit(&path.to_string_lossy());
         state.settle_command();
