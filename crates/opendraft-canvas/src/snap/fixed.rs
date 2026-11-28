@@ -219,8 +219,23 @@ fn dimension_candidates(d: &opendraft_core::Dimension, picture: &[Entity]) -> Ve
 
 /// [`candidates`] for a stored object: a dimension uses the picture the
 /// object remembers, and each point remembers which object it came from.
-pub(crate) fn object_candidates(object: &Object) -> Vec<SnapPoint> {
+/// Every object-snap point an entity carries by itself, with the drawing so a
+/// clipped reference offers only the points of what it draws.
+pub(crate) fn object_candidates(
+    document: Option<&opendraft_core::Document>,
+    object: &Object,
+) -> Vec<SnapPoint> {
     let found = match (&object.entity, object.dimension_picture()) {
+        (Entity::Insert(insert), _)
+            if document.is_some_and(|document| document.insert_is_clipped(insert)) =>
+        {
+            let mut found = vec![SnapPoint::new(insert.insertion, SnapKind::Insertion)];
+            let pieces = document
+                .and_then(|document| document.insert_pieces(object))
+                .unwrap_or_default();
+            found.extend(pieces.iter().flat_map(|piece| candidates(&piece.entity)));
+            found
+        }
         (Entity::Dimension(d), Some(picture)) => dimension_candidates(d, &picture),
         (entity, _) => candidates(entity),
     };

@@ -46,7 +46,7 @@ fn the_remembered_picture_gives_what_the_entity_gives() {
         for p in [Point::new(15.0, 3.0), Point::new(300.0, 41.0)] {
             assert_eq!(distance_to_object(o, p), distance_to_entity(&o.entity, p));
         }
-        let stripped: Vec<_> = object_candidates(o)
+        let stripped: Vec<_> = object_candidates(None, o)
             .iter()
             .map(|c| (c.point, c.kind))
             .collect();
