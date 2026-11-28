@@ -24,8 +24,10 @@ pub const LEAST: [f32; 2] = [200.0, 120.0];
 /// header and a readable panel.
 pub const OPENS_AT_LEAST: [f32; 2] = [300.0, 260.0];
 
-/// One detached panel and where its window was last, in logical pixels of
-/// the screen. `at` is `None` until the window has a position.
+/// One detached panel and where its window was last: `at` is its top-left
+/// corner in pixels of the whole screen (the same whatever monitor it is on:
+/// points would mean something different on each monitor's scale), and `size`
+/// its inside in points. `at` is `None` until the window has a position.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Window {
     pub panel: PanelTab,
@@ -115,12 +117,12 @@ impl Detached {
     }
 
     /// Put every window where it can be seen, one below and right of the
-    /// last, over `main` (the main window's inside, in screen coordinates),
-    /// and no bigger than that window. The windows move at once: their
-    /// builders change, which egui turns into a move.
-    pub fn bring_back(&mut self, main: egui::Rect) {
+    /// last, over `main` (the main window's inside, in pixels of the screen,
+    /// at `ppp` pixels to the point), and no bigger than that window. What the
+    /// windows are placed at changes, so they move at once.
+    pub fn bring_back(&mut self, main: egui::Rect, ppp: f32) {
         for (n, w) in self.windows.iter_mut().enumerate() {
-            let (at, size) = cascade(main, n, w.size);
+            let (at, size) = cascade(main, ppp, n, w.size);
             w.at = Some(at);
             w.size = size;
             self.starts.insert(w.panel, (Some(at), size));
@@ -153,19 +155,21 @@ impl Detached {
     }
 }
 
-/// Where the `index`th window goes when brought back over `main`: stepped
-/// down and right from its top-left corner, and no bigger than the main
-/// window, so its title and buttons can be reached.
-fn cascade(main: egui::Rect, index: usize, size: [f32; 2]) -> ([f32; 2], [f32; 2]) {
-    let room = main.size() * 0.9;
+/// Where the `index`th window goes when brought back over `main` (in pixels,
+/// `ppp` to the point): stepped down and right from its top-left corner, and
+/// no bigger than the main window, so its title and buttons can be reached.
+/// The position is in pixels, the size in points.
+fn cascade(main: egui::Rect, ppp: f32, index: usize, size: [f32; 2]) -> ([f32; 2], [f32; 2]) {
+    let main_pts = main.size() / ppp;
+    let room = main_pts * 0.9;
     let (w, h) = (
         size[0].clamp(LEAST[0], room.x.max(LEAST[0])),
         size[1].clamp(LEAST[1], room.y.max(LEAST[1])),
     );
     let step = (index % 6) as f32 * 32.0;
-    let x = (main.left() + 48.0 + step).min(main.right() - w);
-    let y = (main.top() + 72.0 + step).min(main.bottom() - h);
-    ([x.max(main.left()), y.max(main.top())], [w, h])
+    let x = (48.0 + step).min(main_pts.x - w).max(0.0);
+    let y = (72.0 + step).min(main_pts.y - h).max(0.0);
+    ([main.left() + x * ppp, main.top() + y * ppp], [w, h])
 }
 
 #[cfg(test)]
@@ -229,7 +233,7 @@ mod tests {
         d.add(PanelTab::Properties, Some([5000.0, 10.0]), [3000.0, 2000.0]);
         let first = d.start(&d.windows()[0].clone());
         assert_eq!(first.0, Some([-4000.0, 9000.0]));
-        d.bring_back(main_window());
+        d.bring_back(main_window(), 1.0);
         let [layers, properties] = [&d.windows()[0], &d.windows()[1]];
         assert_eq!(layers.at, Some([148.0, 122.0]));
         assert_eq!(layers.size, [300.0, 400.0]);
@@ -243,9 +247,23 @@ mod tests {
     #[test]
     fn a_brought_back_window_stays_inside_a_small_main_window() {
         let main = egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(400.0, 300.0));
-        let (at, size) = cascade(main, 5, [380.0, 520.0]);
+        let (at, size) = cascade(main, 1.0, 5, [380.0, 520.0]);
         assert!(at[0] >= 0.0 && at[1] >= 0.0);
         assert!(at[0] + size[0] <= 400.0 && at[1] + size[1] <= 300.0);
+    }
+
+    #[test]
+    fn brought_back_windows_are_placed_in_pixels_over_a_monitor_of_another_scale() {
+        // The main window on a 150% monitor starting at pixel 2880: its
+        // inside is 1500 x 1050 pixels, 1000 x 700 points.
+        let main =
+            egui::Rect::from_min_size(egui::pos2(2880.0, -200.0), egui::vec2(1500.0, 1050.0));
+        let (at, size) = cascade(main, 1.5, 0, [300.0, 400.0]);
+        assert_eq!(at, [2880.0 + 48.0 * 1.5, -200.0 + 72.0 * 1.5]);
+        assert_eq!(size, [300.0, 400.0]);
+        // And a window too big for it is cut to 90% of it, in points.
+        let (_, big) = cascade(main, 1.5, 0, [3000.0, 2000.0]);
+        assert_eq!(big, [900.0, 630.0]);
     }
 
     #[test]
