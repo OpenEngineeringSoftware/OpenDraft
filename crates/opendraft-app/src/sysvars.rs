@@ -318,6 +318,16 @@ fn build() -> Vec<SysVar<AppState>> {
                 Ok(())
             },
         ),
+        SysVar::int(
+            "BINDTYPE",
+            "How Bind names dependent symbols: 0 prefix with $0$, 1 bare and merge",
+            (0, 1),
+            |s| flag(s.settings.bind_insert),
+            |s, v| {
+                s.settings.bind_insert = int(v) == 1;
+                Ok(())
+            },
+        ),
     ]
 }
 
@@ -376,6 +386,9 @@ mod tests {
             state.settings.ref_path_type,
             crate::settings::RefPathDefault::Full
         );
+        assert_eq!(table.get("BINDTYPE", &state), Ok(Value::Int(0)));
+        table.set("BINDTYPE", "1", &mut state).unwrap();
+        assert!(state.settings.bind_insert);
     }
 
     #[test]

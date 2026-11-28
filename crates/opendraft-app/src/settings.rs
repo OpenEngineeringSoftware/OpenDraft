@@ -152,6 +152,9 @@ pub struct Settings {
     /// The saved path form a new external reference defaults to
     /// (`REFPATHTYPE`).
     pub ref_path_type: RefPathDefault,
+    /// Bind names dependent symbols bare and merges layers (`BINDTYPE` 1);
+    /// false prefixes them with `$0$`.
+    pub bind_insert: bool,
 }
 
 impl Default for Settings {
@@ -192,6 +195,7 @@ impl Default for Settings {
             language: None,
             xref_overlay: false,
             ref_path_type: RefPathDefault::default(),
+            bind_insert: false,
         }
     }
 }
@@ -479,6 +483,7 @@ mod tests {
             language: Some("fr".into()),
             xref_overlay: true,
             ref_path_type: RefPathDefault::Full,
+            bind_insert: true,
         };
         settings.save(&mut storage);
         assert_eq!(Settings::load(Some(&storage)), settings);

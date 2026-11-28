@@ -99,6 +99,11 @@ impl Document {
             o.attrs.layer == id
                 || matches!(&o.entity, crate::Entity::Insert(i) if i.uses_layer_for_attributes(id))
         }) || self.blocks.iter().any(|b| b.uses_layer(id))
+            || self
+                .xrefs
+                .iter()
+                .flat_map(|x| x.blocks.iter())
+                .any(|b| b.uses_layer(id))
     }
 
     /// The layers that [`layer_in_use`](Self::layer_in_use) says are in use,
@@ -118,7 +123,12 @@ impl Document {
             let id = layer.id;
             if !used.contains(&id)
                 && (inserts.iter().any(|i| i.uses_layer_for_attributes(id))
-                    || self.blocks.iter().any(|b| b.uses_layer(id)))
+                    || self.blocks.iter().any(|b| b.uses_layer(id))
+                    || self
+                        .xrefs
+                        .iter()
+                        .flat_map(|x| x.blocks.iter())
+                        .any(|b| b.uses_layer(id)))
             {
                 used.insert(id);
             }

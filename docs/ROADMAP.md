@@ -108,7 +108,7 @@ Written 2026-10-31. Update it when something is done or the plan changes: tick t
 - [ ] Dimension depth: other arrowheads, styles with colours and linetypes, `DIMBREAK`, jogged radius and `ARC_DIMENSION` as real DXF, annotative scales.
 - [ ] Multileader depth (spline leaders, block content, MLEADEREDIT).
 - [ ] A plugin system for third-party commands; an AutoLISP-compatible subset is a stretch idea, not a promise.
-- [ ] External references (xrefs): the model, `.odraft`, attach through the dialog and `-XREF`, the palette, the ribbon panel, markers, the `XREFTYPE`/`REFPATHTYPE`/`VISRETAIN` variables and DXF/DWG import-export of references are built; Bind, XCLIP and the remaining polish are in `docs/parking_lot.md`.
+- [ ] External references (xrefs): the model, `.odraft`, attach through the dialog and `-XREF`, the palette, the ribbon panel, markers, the `XREFTYPE`/`REFPATHTYPE`/`BINDTYPE`/`VISRETAIN` variables, Bind/XBIND and DXF/DWG import-export of references are built; XCLIP and the remaining polish are in `docs/parking_lot.md`.
 
 Dynamic blocks come last of these, and are built in stages that show a user nothing until the baseline is whole (see "Next steps").
 

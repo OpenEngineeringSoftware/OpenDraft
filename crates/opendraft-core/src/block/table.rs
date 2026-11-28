@@ -224,7 +224,8 @@ impl Document {
                             !i.is_xref
                                 && i.is_valid()
                                 && (i.dynamic.is_none() || i.block.dynamic.is_some())
-                                && x.owns_block(i.block.id)
+                                && (x.owns_block(i.block.id)
+                                    || (!self.is_xref_block(i.block.id) && self.is_current(i)))
                         }
                         None => {
                             i.block.id != block.id

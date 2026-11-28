@@ -136,6 +136,7 @@ pub struct Document {
 
 mod arrays;
 mod attributes;
+mod bind;
 mod blocks;
 mod ccs;
 mod defaults;
@@ -144,6 +145,8 @@ mod layouts;
 mod leaders;
 mod linetypes;
 pub use linetypes::LinetypeUse;
+#[cfg(test)]
+mod bind_tests;
 mod mleader_styles;
 mod modify_settings;
 mod object;

@@ -334,11 +334,12 @@ impl Document {
                     return Err(bad(format!("block \"{}\" repeats an object id", def.name)));
                 }
                 let layer = child.attrs.layer;
-                let layer_ok = if layer == LayerId::DEFAULT {
-                    self.layer(layer).is_some()
-                } else {
-                    xref.owns_layer(layer) && self.layer(layer).is_some()
-                };
+                // Layer 0, a layer bound to this reference, or an ordinary
+                // layer XBIND took off it; never another reference's layer.
+                let layer_ok = self.layer(layer).is_some()
+                    && (layer == LayerId::DEFAULT
+                        || xref.owns_layer(layer)
+                        || self.xref_layer_owner(layer).is_none());
                 if !layer_ok {
                     return Err(bad(format!(
                         "block \"{}\" has an object on layer {}",
@@ -420,14 +421,22 @@ impl Document {
             let Entity::Insert(i) = &child.entity else {
                 continue;
             };
-            let Some(local) = locals.get(&i.block.id) else {
-                stack.pop();
-                return Err(format!(
-                    "an insert points at block {}, which is not part of the reference",
-                    i.block.id.0
-                ));
+            // A local definition of this reference, or a block XBIND made
+            // local while the reference stayed.
+            let target = match locals.get(&i.block.id) {
+                Some(local) => local,
+                None => match self.block(i.block.id) {
+                    Some(host) if !self.is_xref_block(i.block.id) => host,
+                    _ => {
+                        stack.pop();
+                        return Err(format!(
+                            "an insert points at block {}, which is not part of the reference",
+                            i.block.id.0
+                        ));
+                    }
+                },
             };
-            let size = self.xref_subtree(local, locals, depth + 1, stack, memo)?;
+            let size = self.xref_subtree(target, locals, depth + 1, stack, memo)?;
             total = total.saturating_add(size);
         }
         stack.pop();

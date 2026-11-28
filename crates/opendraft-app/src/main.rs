@@ -235,6 +235,7 @@ mod view_twist_cmd;
 mod wblock_cmd;
 mod whats_new;
 mod window_memory;
+mod xbind_cmd;
 mod xline_cmd;
 mod xref_apply;
 mod xref_cmd;

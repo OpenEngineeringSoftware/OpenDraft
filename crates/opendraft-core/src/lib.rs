@@ -102,6 +102,7 @@ mod validate_id_tests;
 mod vertex_edit;
 pub mod width;
 pub mod xref;
+mod xref_bind;
 
 pub use array_record::{ArrayRecord, ArrayShape};
 pub use block::{
@@ -158,6 +159,7 @@ pub use xref::{
     XrefPathType, XrefPlan, XrefProblem, XrefReport, XrefStamp, MAX_XREF_NOTES, MAX_XREF_PATH,
     MAX_XREF_SKIPPED_KINDS,
 };
+pub use xref_bind::{BindError, BindPlan, BindType, XbindSymbol};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Point {

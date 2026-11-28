@@ -4,10 +4,13 @@
 //! one step and a failure leaves the drawing as it was.
 
 use opendraft_commands::{
-    AddLayer, Cancelled, Editor, ModifyEntities, ModifyLayers, RemoveEntities, RemoveLayer,
-    SetBlocks, SetLinetypes, SetTextStyles, SetXrefs, Transaction,
+    AddLayer, Cancelled, Editor, ModifyAttributes, ModifyEntities, ModifyLayers, RemoveEntities,
+    RemoveLayer, SetBlocks, SetLayouts, SetLinetypes, SetTextStyles, SetXrefs, Transaction,
 };
-use opendraft_core::{BlockId, Entity, Insert, Point, XrefDef, XrefPathType, XrefPlan};
+use opendraft_core::{
+    BindPlan, BindType, BlockId, Entity, Insert, Point, XbindSymbol, XrefDef, XrefPathType,
+    XrefPlan,
+};
 
 /// Put the plan's layers, styles and linetypes into the transaction.
 fn tables(tx: &mut Transaction, plan: &XrefPlan) {
@@ -156,6 +159,78 @@ pub(crate) fn detach(ed: &mut Editor, blocks: Vec<BlockId>) -> Result<(), Cancel
     })
 }
 
+/// Bind: make the snapshot and its dependent symbols ordinary host records.
+pub(crate) fn bind(ed: &mut Editor, blocks: Vec<BlockId>, kind: BindType) -> Result<(), Cancelled> {
+    let plan = ed.read(move |doc| doc.plan_bind(&blocks, kind))?;
+    match plan {
+        Ok(plan) => apply_plan(ed, plan, "Bind external reference"),
+        Err(why) => {
+            ed.say(format!("Could not bind the external reference: {why}"));
+            Ok(())
+        }
+    }
+}
+
+/// XBIND: make selected dependent symbols ordinary host records, keeping the
+/// reference itself.
+pub(crate) fn xbind(
+    ed: &mut Editor,
+    symbols: Vec<XbindSymbol>,
+    kind: BindType,
+) -> Result<(), Cancelled> {
+    if symbols.is_empty() {
+        ed.say("No dependent symbol was chosen.");
+        return Ok(());
+    }
+    let plan = ed.read(move |doc| doc.plan_xbind(&symbols, kind))?;
+    match plan {
+        Ok(plan) => apply_plan(ed, plan, "Bind dependent symbols"),
+        Err(why) => {
+            ed.say(format!("Could not bind the dependent symbols: {why}"));
+            Ok(())
+        }
+    }
+}
+
+fn apply_plan(ed: &mut Editor, plan: BindPlan, title: &'static str) -> Result<(), Cancelled> {
+    let notes = plan.notes.clone();
+    ed.transaction(title, move |tx| {
+        tx.perform(SetXrefs::new(title, plan.xrefs));
+        tx.perform(SetBlocks::new(title, plan.blocks));
+        if !plan.entities.is_empty() {
+            tx.perform(ModifyEntities::new(title, plan.entities));
+        }
+        if !plan.attributes.is_empty() {
+            tx.perform(ModifyAttributes::new(title, plan.attributes));
+        }
+        if !plan.layers.is_empty() {
+            tx.perform(ModifyLayers::new(title, plan.layers));
+        }
+        if !plan.removed_layers.is_empty() {
+            tx.perform(RemoveLayer::many(plan.removed_layers));
+        }
+        if let Some(styles) = plan.text_styles {
+            tx.perform(SetTextStyles::new(
+                styles,
+                plan.current_text_style,
+                plan.next_text_style,
+            ));
+        }
+        if let Some(table) = plan.linetypes {
+            let scale = tx.document().linetype_scale();
+            tx.perform(SetLinetypes::new(table, scale));
+        }
+        if let Some(layouts) = plan.layouts {
+            tx.perform(SetLayouts::new(title, layouts));
+        }
+        Ok(())
+    })?;
+    for note in notes {
+        ed.say(note);
+    }
+    Ok(())
+}
+
 /// Edit one reference's saved path. Reload is not implied, as in AutoCAD.
 pub(crate) fn edit_path(
     ed: &mut Editor,
@@ -275,6 +350,119 @@ mod tests {
         assert!(doc.objects().is_empty());
         assert!(doc.block(root).is_none());
         assert_eq!(doc.validate(), Ok(()));
+    }
+
+    #[test]
+    fn bind_makes_the_reference_local_and_undoes_as_one_step() {
+        use std::sync::Arc;
+
+        use opendraft_core::{
+            Attributes, BlockDef, BlockEntity, BlockObjectId, Layer, XbindSymbol,
+        };
+
+        let mut source = Document::default();
+        let walls = source.allocate_layer_id();
+        source.push_layer(Layer::new(walls, "Walls"));
+        let chair_id = source.allocate_block_id();
+        let chair = Arc::new(BlockDef {
+            id: chair_id,
+            name: "Chair".to_owned(),
+            base: Point::default(),
+            description: String::new(),
+            unit: Default::default(),
+            entities: vec![BlockEntity::new(
+                BlockObjectId(0),
+                Entity::Circle {
+                    center: Point::default(),
+                    radius: 1.0,
+                },
+                Attributes::on_layer(walls),
+            )],
+            dynamic: None,
+        });
+        source.push_block(chair.clone());
+        source.add_with(
+            Entity::Line {
+                start: Point::default(),
+                end: Point::new(2.0, 0.0),
+            },
+            Attributes::on_layer(walls),
+        );
+        source.add(Entity::Insert(Box::new(Insert::new(
+            chair,
+            Point::new(4.0, 4.0),
+        ))));
+        source.validate().unwrap();
+
+        let mut state = AppState::new();
+        let plan = plan_xref(
+            state.session().document(),
+            &source,
+            &request(),
+            &XrefLimits::default(),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let root = plan.xref.block;
+        state.start_command("XATTACH", move |ed| {
+            attach(ed, plan, Point::default(), (1.0, 1.0), 0.0)
+        });
+        state.settle_command();
+
+        state.start_command("Bind", move |ed| {
+            super::bind(ed, vec![root], BindType::Bind)
+        });
+        state.settle_command();
+        {
+            let doc = state.session().document();
+            assert!(doc.xrefs().is_empty());
+            assert!(doc.block_named("base$0$Chair").is_some());
+            assert!(doc.layers().iter().any(|l| l.name == "base$0$Walls"));
+            let Entity::Insert(insert) = &doc.objects()[0].entity else {
+                panic!("an insert was expected")
+            };
+            assert!(!insert.is_xref);
+            assert_eq!(doc.validate(), Ok(()));
+        }
+        state.undo();
+        {
+            let doc = state.session().document();
+            assert_eq!(doc.xrefs().len(), 1);
+            assert!(doc.layers().iter().any(|l| l.name == "base|Walls"));
+            assert_eq!(doc.validate(), Ok(()));
+        }
+        state.redo();
+        assert!(state.session().document().xrefs().is_empty());
+
+        // XBIND keeps the reference and makes only the layer local.
+        state.undo();
+        let (root, layer) = {
+            let doc = state.session().document();
+            let root = doc.block_named("base").unwrap().id;
+            let layer = doc.xref(root).unwrap().layers[0].layer;
+            (root, layer)
+        };
+        state.start_command("XBIND", move |ed| {
+            super::xbind(
+                ed,
+                vec![XbindSymbol::Layer { xref: root, layer }],
+                BindType::Bind,
+            )
+        });
+        state.settle_command();
+        {
+            let doc = state.session().document();
+            assert_eq!(doc.xrefs().len(), 1);
+            assert!(doc.xrefs()[0].layers.is_empty());
+            assert!(doc.layers().iter().any(|l| l.name == "base$0$Walls"));
+            assert_eq!(doc.validate(), Ok(()));
+        }
+        state.undo();
+        assert_eq!(
+            state.session().document().xrefs()[0].layers.len(),
+            1,
+            "undo puts the layer binding back"
+        );
     }
 
     /// The public `reload` name clashes with the local variable above.

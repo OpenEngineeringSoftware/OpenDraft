@@ -136,8 +136,18 @@ impl PanelViewer<'_> {
                         .start_command("XREFPATH", move |ed| xref_cmd::edit_path_block(ed, block));
                 }
             }
-            ui.add_enabled(false, egui::Button::new(key!("Bind")))
-                .on_disabled_hover_text(key!("Binding external references is not built yet."));
+            if ui
+                .add_enabled(selected.is_some(), egui::Button::new(key!("Bind")))
+                .on_disabled_hover_text(key!("Select an external reference to bind."))
+                .clicked()
+            {
+                if let Some(block) = selected {
+                    let kind = self.state.xref_defaults().bind_type;
+                    self.state.start_command("XBIND", move |ed| {
+                        crate::xref_apply::bind(ed, vec![block], kind)
+                    });
+                }
+            }
             if ui.button(key!("Refresh")).clicked() {
                 ui.data_mut(|data| data.remove::<Cache>(id));
                 ui.ctx().request_repaint();

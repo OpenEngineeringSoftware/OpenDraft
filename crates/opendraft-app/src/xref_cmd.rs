@@ -11,7 +11,7 @@ use opendraft_commands::{
     Cancelled, Command, Editor, NumberOptions, Options, PointOptions, Wording, XrefHostDir,
 };
 use opendraft_core::{
-    path_problem, BlockId, XrefAttachDraft, XrefKind, XrefLoadRequest, XrefPathType,
+    path_problem, BindType, BlockId, XrefAttachDraft, XrefKind, XrefLoadRequest, XrefPathType,
 };
 use opendraft_ui::key;
 
@@ -30,6 +30,11 @@ pub fn commands() -> Vec<Command<AppState>> {
             s.start_command("XATTACH", attach_dialog)
         })
         .checked(|s| s.is_running("XATTACH"))
+        .transparent(),
+        Command::new("xref.bind_symbols", "XBIND", |s: &mut AppState| {
+            s.start_command("XBIND", crate::xbind_cmd::xbind)
+        })
+        .checked(|s| s.is_running("XBIND"))
         .transparent(),
         Command::new("xref.palette", "External References", |s: &mut AppState| {
             s.show_xrefs_panel();
@@ -54,12 +59,7 @@ fn command_line(ed: &mut Editor) -> Result<(), Cancelled> {
     let choice = ed.get_keyword(options)?;
     match option(&choice) {
         "?" => list(ed),
-        "Bind" => {
-            ed.say(key!(
-                "Binding external references is not built yet; use Detach or keep the source drawing."
-            ));
-            Ok(())
-        }
+        "Bind" => crate::xbind_cmd::bind_all(ed),
         "Detach" => detach(ed),
         "Path" => edit_path(ed),
         "Unload" => unload(ed),
@@ -112,7 +112,7 @@ fn list(ed: &mut Editor) -> Result<(), Cancelled> {
 }
 
 /// The blocks the user named: `*` for every one, or a comma-separated list.
-fn chosen(ed: &Editor, message: &str) -> Result<Vec<BlockId>, Cancelled> {
+pub(crate) fn chosen(ed: &Editor, message: &str) -> Result<Vec<BlockId>, Cancelled> {
     let names = ed.get_string(Options::<String>::new(message))?;
     ed.read(move |doc| {
         let names = names.trim();
@@ -132,11 +132,13 @@ fn host_dir(ed: &Editor) -> Option<String> {
         .and_then(|dir| dir.0.clone())
 }
 
-/// The `XREFTYPE` and `REFPATHTYPE` defaults, read when a command starts.
+/// The `XREFTYPE`, `REFPATHTYPE` and `BINDTYPE` defaults, read when a
+/// command starts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct XrefDefaults {
     pub overlay: bool,
     pub path_type: XrefPathType,
+    pub bind_type: BindType,
 }
 
 impl Default for XrefDefaults {
@@ -144,11 +146,12 @@ impl Default for XrefDefaults {
         Self {
             overlay: false,
             path_type: XrefPathType::Relative,
+            bind_type: BindType::Bind,
         }
     }
 }
 
-fn defaults_of(ed: &Editor) -> XrefDefaults {
+pub(crate) fn defaults_of(ed: &Editor) -> XrefDefaults {
     ed.context()
         .get::<XrefDefaults>()
         .map(|defaults| *defaults)
@@ -433,12 +436,13 @@ fn ask_path(ed: &mut Editor) -> Result<Option<(String, XrefPathType)>, Cancelled
 }
 
 impl AppState {
-    /// The reference type and path type a new reference starts from, read
-    /// when a command starts (`XREFTYPE`, `REFPATHTYPE`).
+    /// The reference type, path type and bind type a command starts from,
+    /// read when it starts (`XREFTYPE`, `REFPATHTYPE`, `BINDTYPE`).
     pub(crate) fn xref_defaults(&self) -> XrefDefaults {
         XrefDefaults {
             overlay: self.settings.xref_overlay,
             path_type: self.settings.ref_path_type.to_core(),
+            bind_type: BindType::from_code(self.settings.bind_insert as i64),
         }
     }
 }
