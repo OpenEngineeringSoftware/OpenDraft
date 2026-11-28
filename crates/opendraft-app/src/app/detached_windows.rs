@@ -3,6 +3,7 @@
 use eframe::egui;
 use egui_dock::DockState;
 
+use super::detached_drag;
 use super::panels::PanelViewer;
 use super::OpenDraftApp;
 use crate::detached::{Detached, DEFAULT_SIZE};
@@ -15,6 +16,8 @@ struct Asked {
     pub dock: Vec<PanelTab>,
     /// The window's own close button was pressed.
     pub close: Vec<PanelTab>,
+    /// A window's drag handle is being carried, or was let go.
+    pub moved: Option<(PanelTab, detached_drag::Moved)>,
     /// Keys no widget of a window used (see [`unused_keys`]).
     pub keys: Vec<egui::Event>,
 }
@@ -101,7 +104,7 @@ fn show(
         let mut builder = egui::ViewportBuilder::default()
             .with_title(title.to_string())
             .with_inner_size(size)
-            .with_min_inner_size([200.0, 120.0])
+            .with_min_inner_size(detached_drag::LEAST)
             .with_window_level(egui::WindowLevel::AlwaysOnTop);
         if let Some(p) = at {
             builder = builder.with_position(egui::pos2(p[0], p[1]));
@@ -124,9 +127,14 @@ fn show(
                         .inner_margin(egui::Margin::symmetric(6, 3)),
                 )
                 .show(ctx, |ui| {
-                    if ui.button(opendraft_ui::i18n::tr("Dock")).clicked() {
-                        asked.dock.push(panel);
-                    }
+                    ui.horizontal(|ui| {
+                        if ui.button(opendraft_ui::i18n::tr("Dock")).clicked() {
+                            asked.dock.push(panel);
+                        }
+                        if let Some(moved) = detached_drag::handle(ui, panel) {
+                            asked.moved = Some((panel, moved));
+                        }
+                    });
                 });
             egui::CentralPanel::default()
                 .frame(egui::Frame::NONE.fill(fill))
@@ -140,7 +148,8 @@ fn show(
                 asked.close.push(panel);
             }
             let (outer, inner) = ctx.input(|i| (i.viewport().outer_rect, i.viewport().inner_rect));
-            if let (Some(o), Some(i)) = (outer, inner) {
+            // Not while the window is shrunk to be carried.
+            if let (Some(o), Some(i)) = (outer, inner.filter(|i| i.height() > 60.0)) {
                 seen = Some(([o.min.x, o.min.y], [i.width(), i.height()]));
             }
         });
@@ -207,6 +216,16 @@ pub(super) fn run(
 ) {
     settle(ctx, on, dock, places, detached);
     let asked = show(ctx, fill, detached, viewer);
+    if let Some((panel, moved)) = asked.moved {
+        let main = ctx.input(|i| i.viewport().inner_rect);
+        if let Some(main) = main.filter(|r| r.contains(moved.pointer)) {
+            let at = moved.pointer - main.min.to_vec2();
+            let theme = viewer.theme;
+            if dock::offer_detached(ctx, theme, dock, panel, at, moved.released) {
+                detached.remove(panel);
+            }
+        }
+    }
     if !asked.keys.is_empty() {
         detached.forward(asked.keys);
         ctx.request_repaint();

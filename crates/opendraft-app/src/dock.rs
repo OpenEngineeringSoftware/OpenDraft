@@ -14,7 +14,7 @@ mod places;
 mod sizes;
 mod targets;
 
-pub use drag::show_area;
+pub use drag::{offer_detached, show_area};
 pub use places::Places;
 pub use sizes::{keep_minimum_sizes, split_shares};
 

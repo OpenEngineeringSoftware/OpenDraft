@@ -15,6 +15,7 @@ mod command_source;
 mod consent_dialog;
 mod context_menu;
 mod ctrl_watch;
+mod detached_drag;
 mod detached_windows;
 mod dim_manager;
 mod dim_preview;
