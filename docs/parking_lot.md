@@ -89,7 +89,7 @@ More in `docs/ARCHITECTURE.md`, "Hatches".
 - Attributes and blocks in DXF are checked with ezdxf only, not AutoCAD.
 - Picture cache for block references (not worth it on the evidence so far: see `docs/ARCHITECTURE.md`).
 - External references, clipping: inverted clips; object snaps that ignore clipped-away geometry; text, hatch, dimension and leader objects that cross a boundary are kept whole, not trimmed.
-- External references, loading: nested xrefs (attach/overlay rules, cycle detection by canonical path); demand loading (`XLOADCTL`/`XLOADPATH`); notification and fade (`XREFNOTIFY`, `XDWGFADECTL`); URL/network paths; renaming a reference (a reload refuses a changed name); giving up on a read in progress (only `cancel_file_work` sets its flag, so Esc on the command leaves the read to finish and be dropped).
+- External references, loading: nested xrefs (attach/overlay rules, cycle detection by canonical path); demand loading (`XLOADCTL`/`XLOADPATH`); notification and fade (`XREFNOTIFY`, `XDWGFADECTL`); URL/network paths; renaming a reference (a reload refuses a changed name).
 - External references, binding: Bind refuses a snapshot holding a hatch, construction line or ray (a host block cannot hold them), a clipped reference and an unloaded one. Dimension and multileader styles are not bound; dependent text styles and linetypes are found by their `<xref>|` prefix, not recorded on the reference.
 - External references, records and files: a cross-drawing clipboard of a reference (refused, not flattened); xref-dependent dimension and multileader style records as first-class tables; DWG layer xref flags. A reference opened from DXF or DWG shows "Not loaded" until it is reloaded.
 

@@ -43,9 +43,7 @@ impl AppState {
             .as_ref()
             .is_some_and(|(id, started)| *started == request && self.io.is_live(*id));
         if !running {
-            if let Some((id, _)) = self.xref_job.take() {
-                self.io.cancel_job(id);
-            }
+            self.cancel_xref_job();
             let Some(doc) = self.docs.get(self.run_doc) else {
                 self.reply(Reply::XrefFailed(
                     "there is no drawing to attach it to".to_owned(),
@@ -68,6 +66,14 @@ impl AppState {
             self.xref_job = Some((id, request));
         }
         self.poll_io();
+    }
+
+    /// Give up on the read under way, if any: its flag is set so the worker
+    /// stops, and its result is thrown away.
+    pub(crate) fn cancel_xref_job(&mut self) {
+        if let Some((id, _)) = self.xref_job.take() {
+            self.io.cancel_job(id);
+        }
     }
 
     /// A finished read: answer the command if it still waits for it.
@@ -156,6 +162,22 @@ mod tests {
         state.finish_xref_plan(&wanted, Reply::XrefFailed("gone".to_owned()));
         state.settle_command();
         assert!(!state.command_running());
+    }
+
+    #[test]
+    fn cancelling_the_command_gives_up_on_its_read() {
+        let mut state = AppState::new();
+        state.start_command("-XREF", |ed| {
+            let _ = ed.ask_xref_plan(request("base"))?;
+            Ok(())
+        });
+        state.settle_command();
+        let id = state.io.submit_cancellable(|_| Done::Finished);
+        state.xref_job = Some((id, request("base")));
+        assert!(state.io.is_live(id));
+        state.cancel_command();
+        assert!(state.xref_job.is_none());
+        assert!(!state.io.is_live(id), "the read was given up on");
     }
 
     #[test]

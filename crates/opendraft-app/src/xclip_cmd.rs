@@ -25,14 +25,12 @@ pub(crate) fn xclip(ed: &mut Editor) -> Result<(), Cancelled> {
         ));
         return Ok(());
     }
-    let options = Options::<String>::new(key!(
-        "Enter an option [New boundary/ON/OFF/Delete] <New boundary>"
-    ))
-    .keyword("New boundary", "N")
-    .keyword("ON", "ON")
-    .keyword("OFF", "OF")
-    .keyword("Delete", "D")
-    .default("New boundary".to_owned());
+    let options = Options::<String>::new(key!("Enter an option"))
+        .keyword("New boundary", "N")
+        .keyword("ON", "ON")
+        .keyword("OFF", "OF")
+        .keyword("Delete", "D")
+        .default("New boundary".to_owned());
     match ed.get_keyword(options)?.as_str() {
         "ON" => set_enabled(ed, &picked, true),
         "OFF" => set_enabled(ed, &picked, false),
@@ -80,12 +78,10 @@ fn delete(ed: &mut Editor, picked: &[(BlockId, EntityId)]) -> Result<(), Cancell
 
 /// Pick a new boundary: two corners, or a polygon closed with Enter.
 fn new_boundary(ed: &mut Editor, picked: &[(BlockId, EntityId)]) -> Result<(), Cancelled> {
-    let options = Options::<String>::new(key!(
-        "Enter boundary type [Rectangular/Polygonal] <Rectangular>"
-    ))
-    .keyword("Rectangular", "R")
-    .keyword("Polygonal", "P")
-    .default("Rectangular".to_owned());
+    let options = Options::<String>::new(key!("Enter boundary type"))
+        .keyword("Rectangular", "R")
+        .keyword("Polygonal", "P")
+        .default("Rectangular".to_owned());
     let world = if ed.get_keyword(options)? == "Polygonal" {
         let mut points = Vec::new();
         loop {

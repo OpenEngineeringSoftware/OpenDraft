@@ -49,18 +49,16 @@ pub fn commands() -> Vec<Command<AppState>> {
 
 /// `-XREF`: AutoCAD's command-line options.
 fn command_line(ed: &mut Editor) -> Result<(), Cancelled> {
-    let options = Options::<String>::new(key!(
-        "Enter an option [?/Bind/Detach/Path/Unload/Reload/Overlay/Attach] <Attach>"
-    ))
-    .keyword("?", "?")
-    .keyword("Bind", "B")
-    .keyword("Detach", "D")
-    .keyword("Path", "P")
-    .keyword("Unload", "U")
-    .keyword("Reload", "R")
-    .keyword("Overlay", "O")
-    .keyword("Attach", "A")
-    .default("Attach".to_owned());
+    let options = Options::<String>::new(key!("Enter an option"))
+        .keyword("?", "?")
+        .keyword("Bind", "B")
+        .keyword("Detach", "D")
+        .keyword("Path", "P")
+        .keyword("Unload", "U")
+        .keyword("Reload", "R")
+        .keyword("Overlay", "O")
+        .keyword("Attach", "A")
+        .default("Attach".to_owned());
     let choice = ed.get_keyword(options)?;
     match option(&choice) {
         "?" => list(ed),
@@ -418,12 +416,11 @@ fn ask_path(ed: &mut Editor) -> Result<Option<(String, XrefPathType)>, Cancelled
         ed.say(problem.to_string());
         return Ok(None);
     }
-    let type_options =
-        Options::<String>::new(key!("Enter path type [Full/Relative/NoPath] <Relative>"))
-            .keyword("Full", "F")
-            .keyword("Relative", "R")
-            .keyword("NoPath", "N")
-            .default("Relative".to_owned());
+    let type_options = Options::<String>::new(key!("Enter path type"))
+        .keyword("Full", "F")
+        .keyword("Relative", "R")
+        .keyword("NoPath", "N")
+        .default("Relative".to_owned());
     let path_type = match ed.get_keyword(type_options)?.to_ascii_lowercase() {
         typed if typed.starts_with('f') => XrefPathType::Full,
         typed if typed.starts_with('n') => XrefPathType::NoPath,

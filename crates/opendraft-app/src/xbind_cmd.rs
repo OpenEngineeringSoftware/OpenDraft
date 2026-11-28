@@ -32,14 +32,13 @@ pub(crate) fn bind_all(ed: &mut Editor) -> Result<(), Cancelled> {
 
 /// The command.
 pub(crate) fn xbind(ed: &mut Editor) -> Result<(), Cancelled> {
-    let type_options =
-        Options::<String>::new(key!("Enter symbol type [Block/Dimstyle/LAyer/LType/Text]"))
-            .keyword("Block", "B")
-            .keyword("Dimstyle", "D")
-            .keyword("LAyer", "A")
-            .keyword("LType", "L")
-            .keyword("Text", "T")
-            .default("Block".to_owned());
+    let type_options = Options::<String>::new(key!("Enter symbol type"))
+        .keyword("Block", "B")
+        .keyword("Dimstyle", "D")
+        .keyword("LAyer", "A")
+        .keyword("LType", "L")
+        .keyword("Text", "T")
+        .default("Block".to_owned());
     let label = ed.get_keyword(type_options)?;
     let kind = match label.as_str() {
         "Dimstyle" => 'd',
