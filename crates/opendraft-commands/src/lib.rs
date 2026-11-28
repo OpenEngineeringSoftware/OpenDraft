@@ -73,4 +73,4 @@ pub use sysvar::{Kind, SysVar, SysVarError, SysVarTable, TableError, Value};
 pub use text_style_action::SetTextStyles;
 pub use transaction::Transaction;
 pub use units_action::SetUnits;
-pub use xref_action::{SetVisretain, SetXrefs};
+pub use xref_action::{SetVisretain, SetXclipFrame, SetXrefs};

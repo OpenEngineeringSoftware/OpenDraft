@@ -72,6 +72,8 @@ pub enum BindError {
         reference: String,
         what: &'static str,
     },
+    /// The reference is clipped, and Bind would drop the boundary.
+    Clipped { reference: String },
 }
 
 impl std::fmt::Display for BindError {
@@ -87,6 +89,11 @@ impl std::fmt::Display for BindError {
                 f,
                 "external reference \"{reference}\" holds a {what}, which a host block cannot; \
                  bind is not available. Keep the source drawing."
+            ),
+            Self::Clipped { reference } => write!(
+                f,
+                "external reference \"{reference}\" is clipped, and Bind would drop its clip \
+                 boundary; delete the clip first or keep the reference."
             ),
         }
     }

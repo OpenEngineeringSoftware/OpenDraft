@@ -42,6 +42,7 @@ impl Default for Document {
             xrefs: Vec::new(),
             insert_base: crate::Point::default(),
             visretain: true,
+            xclip_frame: 2,
             block_editor_dynamic: None,
             next_attribute_definition_id: 1,
             linetypes: LinetypeTable::default(),

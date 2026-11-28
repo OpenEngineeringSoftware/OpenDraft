@@ -108,6 +108,7 @@ impl DrawingDto {
         document.set_xrefs(records);
         document.set_insert_base(from_point(self.insert_base)?);
         document.set_visretain(self.visretain);
+        document.set_xclip_frame(self.xclip_frame);
         document.reserve_block_ids(self.next_block_id);
         document.reserve_attribute_definition_ids(self.next_attribute_definition_id);
         let layout_ids: HashSet<u64> = self.layouts.iter().map(LayoutDto::id).collect();

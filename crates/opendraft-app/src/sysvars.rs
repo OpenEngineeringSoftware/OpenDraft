@@ -299,6 +299,20 @@ fn build() -> Vec<SysVar<AppState>> {
             },
         ),
         SysVar::int(
+            "XCLIPFRAME",
+            "Clip frames: 0 hidden, 1 drawn, 2 drawn and plotted",
+            (0, 2),
+            |s| Value::Int(i64::from(s.session().document().xclip_frame())),
+            |s, v| {
+                let value = u8::try_from(int(v)).unwrap_or(2);
+                s.perform(opendraft_commands::SetXclipFrame::new(
+                    "XCLIPFRAME",
+                    value,
+                ));
+                Ok(())
+            },
+        ),
+        SysVar::int(
             "XREFTYPE",
             "Default reference type for a new external reference: 0 attach, 1 overlay",
             (0, 1),
@@ -389,6 +403,11 @@ mod tests {
         assert_eq!(table.get("BINDTYPE", &state), Ok(Value::Int(0)));
         table.set("BINDTYPE", "1", &mut state).unwrap();
         assert!(state.settings.bind_insert);
+        assert_eq!(table.get("XCLIPFRAME", &state), Ok(Value::Int(2)));
+        table.set("XCLIPFRAME", "1", &mut state).unwrap();
+        assert_eq!(state.session().document().xclip_frame(), 1);
+        assert!(table.set("XCLIPFRAME", "3", &mut state).is_err());
+        assert_eq!(state.session().document().xclip_frame(), 1);
     }
 
     #[test]

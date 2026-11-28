@@ -11,12 +11,13 @@ use opendraft_commands::{
     Cancelled, Command, Editor, NumberOptions, Options, PointOptions, Wording, XrefHostDir,
 };
 use opendraft_core::{
-    path_problem, BindType, BlockId, XrefAttachDraft, XrefKind, XrefLoadRequest, XrefPathType,
+    path_problem, BlockId, XrefAttachDraft, XrefKind, XrefLoadRequest, XrefPathType,
 };
 use opendraft_ui::key;
 
 use crate::state::AppState;
 use crate::xref_apply;
+use crate::xref_defaults::defaults_of;
 
 /// The commands, for the command table.
 pub fn commands() -> Vec<Command<AppState>> {
@@ -35,6 +36,11 @@ pub fn commands() -> Vec<Command<AppState>> {
             s.start_command("XBIND", crate::xbind_cmd::xbind)
         })
         .checked(|s| s.is_running("XBIND"))
+        .transparent(),
+        Command::new("xref.clip", "XCLIP", |s: &mut AppState| {
+            s.start_command("XCLIP", crate::xclip_cmd::xclip)
+        })
+        .checked(|s| s.is_running("XCLIP"))
         .transparent(),
         Command::new("xref.palette", "External References", |s: &mut AppState| {
             s.show_xrefs_panel();
@@ -130,32 +136,6 @@ fn host_dir(ed: &Editor) -> Option<String> {
     ed.context()
         .get::<XrefHostDir>()
         .and_then(|dir| dir.0.clone())
-}
-
-/// The `XREFTYPE`, `REFPATHTYPE` and `BINDTYPE` defaults, read when a
-/// command starts.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct XrefDefaults {
-    pub overlay: bool,
-    pub path_type: XrefPathType,
-    pub bind_type: BindType,
-}
-
-impl Default for XrefDefaults {
-    fn default() -> Self {
-        Self {
-            overlay: false,
-            path_type: XrefPathType::Relative,
-            bind_type: BindType::Bind,
-        }
-    }
-}
-
-pub(crate) fn defaults_of(ed: &Editor) -> XrefDefaults {
-    ed.context()
-        .get::<XrefDefaults>()
-        .map(|defaults| *defaults)
-        .unwrap_or_default()
 }
 
 /// The name a source file suggests for its reference: the stem, or "xref".
@@ -433,18 +413,6 @@ fn ask_path(ed: &mut Editor) -> Result<Option<(String, XrefPathType)>, Cancelled
         _ => XrefPathType::Relative,
     };
     Ok(Some((path, path_type)))
-}
-
-impl AppState {
-    /// The reference type, path type and bind type a command starts from,
-    /// read when it starts (`XREFTYPE`, `REFPATHTYPE`, `BINDTYPE`).
-    pub(crate) fn xref_defaults(&self) -> XrefDefaults {
-        XrefDefaults {
-            overlay: self.settings.xref_overlay,
-            path_type: self.settings.ref_path_type.to_core(),
-            bind_type: BindType::from_code(self.settings.bind_insert as i64),
-        }
-    }
 }
 
 #[cfg(test)]

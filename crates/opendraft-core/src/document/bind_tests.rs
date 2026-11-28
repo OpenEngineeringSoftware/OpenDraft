@@ -79,6 +79,7 @@ fn host() -> (Document, BlockId, BlockId, LayerId) {
             layer: walls,
         }],
         blocks: vec![chair],
+        clip: None,
         report: XrefReport::default(),
     }]);
     doc.add_with(
@@ -240,6 +241,20 @@ fn xbind_a_style_and_a_linetype_rename_them() {
     assert!(doc.text_styles().iter().any(|s| s.name == "base$0$Notes"));
     assert!(doc.linetypes().named("base$0$Dash").is_some());
     assert_eq!(doc.validate(), Ok(()));
+}
+
+#[test]
+fn a_clipped_reference_refuses_binding_rather_than_dropping_the_boundary() {
+    let (mut doc, root, _chair, _walls) = host();
+    let mut records = doc.xrefs().to_vec();
+    records[0].clip = Some(crate::XrefClip::new(vec![
+        Point::new(0.0, 0.0),
+        Point::new(1.0, 0.0),
+        Point::new(1.0, 1.0),
+    ]));
+    doc.set_xrefs(records);
+    let error = doc.plan_bind(&[root], BindType::Bind).unwrap_err();
+    assert!(matches!(error, BindError::Clipped { .. }), "{error}");
 }
 
 #[test]

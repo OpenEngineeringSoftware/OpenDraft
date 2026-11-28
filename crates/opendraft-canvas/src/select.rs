@@ -362,9 +362,29 @@ pub fn select<'a>(objects: impl IntoIterator<Item = &'a Object>, region: &Region
 /// the document's index which lie within reach of the region first.
 pub fn select_in(document: &Document, region: &Region) -> Vec<EntityId> {
     match region.envelope() {
-        Some(envelope) => select(document.selectable_here_in_rect(envelope), region),
+        Some(envelope) => document
+            .selectable_here_in_rect(envelope)
+            .into_iter()
+            .filter(|object| selected_in(document, object, region))
+            .map(|object| object.id)
+            .collect(),
         None => Vec::new(),
     }
+}
+
+/// [`selected_object`] with the drawing, so a clipped reference is selected by
+/// what it draws, not by its whole snapshot.
+fn selected_in(document: &Document, object: &Object, region: &Region) -> bool {
+    let Some(pieces) = document.insert_pieces(object) else {
+        return selected_object(object, region);
+    };
+    let samples: Vec<Point> = pieces
+        .iter()
+        .flat_map(|piece| sample_points(&piece.entity))
+        .collect();
+    selected_by(region, &samples, |edges| {
+        pieces.iter().any(|piece| touches(&piece.entity, edges))
+    })
 }
 
 #[cfg(test)]

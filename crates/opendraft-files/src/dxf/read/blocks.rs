@@ -236,6 +236,7 @@ impl Importer {
                 stamp: None,
                 layers,
                 blocks: Vec::new(),
+                clip: None,
                 report: opendraft_core::XrefReport::default(),
             });
         }
@@ -407,7 +408,14 @@ impl Importer {
             Item::Insert(insert) => self.blocks.built.insert(insert),
         };
         if let Some(entity) = entity {
+            let clip_dictionary = match &entity {
+                Entity::Insert(i) if i.is_xref => super::clips::extension_dictionary(record),
+                _ => None,
+            };
             let id = self.document.add_with(entity, attrs);
+            if let Some(dictionary) = clip_dictionary {
+                self.clip_inserts.push((id, dictionary));
+            }
             if let Some(handle) = record.text(5) {
                 self.handles.insert(handle.to_uppercase(), id);
             }

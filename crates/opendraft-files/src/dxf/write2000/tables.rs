@@ -5,9 +5,17 @@ use std::collections::BTreeSet;
 
 use opendraft_core::Document;
 
-use super::{block_name, hex, true_color, weight_code, Handles, Ids};
+use super::{hex, true_color, weight_code, Handles, Ids};
 use crate::dxf::model_freeze;
 use crate::dxf::write::{aci_for, dxf_name, Out};
+
+/// `*Paper_Space`, `*Paper_Space0`, `*Paper_Space1`... by tab position.
+pub(super) fn block_name(index: usize) -> String {
+    match index {
+        0 => "*Paper_Space".to_owned(),
+        n => format!("*Paper_Space{}", n - 1),
+    }
+}
 
 pub(super) fn write_tables(
     out: &mut Out,

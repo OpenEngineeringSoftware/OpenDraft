@@ -33,6 +33,7 @@ mod polyline;
 mod spline;
 mod text;
 mod ucs;
+mod warnings;
 
 /// One group: a code and its value.
 #[derive(Clone)]
@@ -167,8 +168,12 @@ struct Importer {
     dim_styles: dimension::Styles,
     /// Coordinate systems left out as 3D or mirrored.
     tilted_ccs: usize,
-    /// `SPATIAL_FILTER` objects (XCLIP boundaries), which are not preserved.
+    /// `SPATIAL_FILTER` objects (XCLIP boundaries) that could not be kept.
     clipped: usize,
+    /// The clip boundaries the OBJECTS section holds, by handle.
+    clips: clips::Filters,
+    /// Inserts whose extension dictionary may name a clip boundary.
+    clip_inserts: Vec<(opendraft_core::EntityId, String)>,
 }
 
 impl Importer {
@@ -294,37 +299,6 @@ impl Importer {
     fn skip(&mut self, name: &str) {
         *self.skipped.entry(name.to_owned()).or_insert(0) += 1;
     }
-
-    fn warnings(&self) -> Vec<String> {
-        let mut warnings = self.ltypes.warnings();
-        if !self.skipped.is_empty() {
-            let total: usize = self.skipped.values().sum();
-            let kinds: Vec<String> = self
-                .skipped
-                .iter()
-                .map(|(k, n)| format!("{n} {k}"))
-                .collect();
-            warnings.push(format!(
-                "Skipped {total} unsupported object{}: {}.",
-                if total == 1 { "" } else { "s" },
-                kinds.join(", ")
-            ));
-        }
-        if self.paper_space > 0 {
-            warnings.push(format!("Skipped {} paper space objects.", self.paper_space));
-        }
-        if self.invisible > 0 {
-            let objects = crate::plural(self.invisible as u64, "object");
-            warnings.push(format!("Skipped {objects} marked invisible."));
-        }
-        if self.damaged > 0 {
-            warnings.push(format!("Skipped {} damaged objects.", self.damaged));
-        }
-        warnings.extend(clips::warning(self.clipped));
-        warnings.extend(self.blocks.warnings());
-        warnings.extend(super::ccs::warning(self.tilted_ccs));
-        warnings
-    }
 }
 
 /// The base point (`$INSBASE`) and OpenDraft's block marker of a DXF; an
@@ -375,6 +349,7 @@ pub fn read(bytes: &[u8]) -> Result<Loaded, FileError> {
         return Err(FileError::Unreadable("not a DXF file".into()));
     }
     let mut importer = Importer::new();
+    importer.clips = clips::scan(&records);
     let mut spaces = layouts::Spaces::scan(&records, &mut importer.document);
     importer.scan_styles(&records);
     importer.scan_dynamic(&records);
@@ -435,6 +410,7 @@ pub fn read(bytes: &[u8]) -> Result<Loaded, FileError> {
     importer.resolve_hatch_sources();
     importer.resolve_leaders();
     importer.resolve_linetypes();
+    importer.apply_clips();
     let mut warnings = importer.warnings();
     warnings.extend(spaces.warnings());
     spaces.finish(&mut importer);

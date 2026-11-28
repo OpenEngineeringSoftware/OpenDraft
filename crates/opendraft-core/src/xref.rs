@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::block::block_name_problem;
+use crate::xref_clip::XrefClip;
 use crate::{BlockDef, BlockId, Document, Layer, LayerId, LinetypeTable, Point, TextStyle};
 
 /// Longest saved path stored, in characters (DXF group 1's practical limit).
@@ -138,6 +139,8 @@ pub struct XrefDef {
     /// Root entities and these definitions refer to them by `Arc` and unique
     /// `BlockId`.
     pub blocks: Vec<Arc<BlockDef>>,
+    /// The `XCLIP` boundary, in the root block's coordinates.
+    pub clip: Option<XrefClip>,
     pub report: XrefReport,
 }
 

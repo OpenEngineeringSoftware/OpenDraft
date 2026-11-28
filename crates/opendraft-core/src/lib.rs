@@ -103,6 +103,7 @@ mod vertex_edit;
 pub mod width;
 pub mod xref;
 mod xref_bind;
+mod xref_clip;
 
 pub use array_record::{ArrayRecord, ArrayShape};
 pub use block::{
@@ -160,6 +161,7 @@ pub use xref::{
     MAX_XREF_SKIPPED_KINDS,
 };
 pub use xref_bind::{BindError, BindPlan, BindType, XbindSymbol};
+pub use xref_clip::{clip_problem, XrefClip, MAX_CLIP_POINTS};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Point {

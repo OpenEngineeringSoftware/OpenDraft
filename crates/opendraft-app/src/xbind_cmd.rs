@@ -21,7 +21,7 @@ pub(crate) fn bind_all(ed: &mut Editor) -> Result<(), Cancelled> {
         return Ok(());
     }
     let count = blocks.len();
-    crate::xref_apply::bind(ed, blocks, crate::xref_cmd::defaults_of(ed).bind_type)?;
+    crate::xref_apply::bind(ed, blocks, crate::xref_defaults::defaults_of(ed).bind_type)?;
     ed.say(Wording::count(
         count,
         key!("Bound %{count} external reference."),
@@ -72,7 +72,7 @@ pub(crate) fn xbind(ed: &mut Editor) -> Result<(), Cancelled> {
         return Ok(());
     }
     let count = symbols.len();
-    xref_apply::xbind(ed, symbols, crate::xref_cmd::defaults_of(ed).bind_type)?;
+    xref_apply::xbind(ed, symbols, crate::xref_defaults::defaults_of(ed).bind_type)?;
     ed.say(Wording::count(
         count,
         key!("Bound %{count} dependent symbol."),

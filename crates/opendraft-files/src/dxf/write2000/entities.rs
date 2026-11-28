@@ -130,6 +130,7 @@ pub(super) fn entity_head(
         .annotations
         .get(&id)
         .copied()
+        .or_else(|| ids.clip_handles(id).map(|handles| handles.insert))
         .unwrap_or_else(|| h.next());
     out.pair(5, hex(handle));
     out.pair(330, hex(owner));

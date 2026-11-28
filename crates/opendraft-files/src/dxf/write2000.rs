@@ -15,7 +15,9 @@ use std::collections::{BTreeSet, HashMap};
 use opendraft_core::{Attr, Color, Document, LayerId, Layout, Lineweight};
 
 mod blocks;
+mod clip;
 mod dimension;
+mod encode;
 mod entities;
 mod hatch;
 mod insert;
@@ -28,7 +30,7 @@ mod text;
 
 use entities::{write_object, write_viewports};
 use objects::write_objects;
-use tables::write_tables;
+use tables::{block_name, write_tables};
 
 use super::units::header as units_header;
 use super::write::{finite, Out};
@@ -72,14 +74,9 @@ struct Ids {
     dim_styles: Vec<u32>,
     /// The block record of each of the drawing's block definitions.
     blocks: HashMap<opendraft_core::BlockId, u32>,
-}
-
-/// `*Paper_Space`, `*Paper_Space0`, `*Paper_Space1`... by tab position.
-fn block_name(index: usize) -> String {
-    match index {
-        0 => "*Paper_Space".to_owned(),
-        n => format!("*Paper_Space{}", n - 1),
-    }
+    /// The handles of each clipped reference's insert, extension dictionary,
+    /// `ACAD_FILTER` dictionary and `SPATIAL_FILTER`.
+    clips: Vec<(opendraft_core::EntityId, clip::ClipHandles)>,
 }
 
 /// The sheets to write. AutoCAD requires `*Paper_Space` and a layout besides
@@ -93,23 +90,8 @@ fn sheets(document: &Document) -> Cow<'_, [Layout]> {
     }
 }
 
-/// The text as ASCII bytes. DXF 2000 and later keep non-ASCII characters in
-/// text as `\U+XXXX`, which reads the same whatever code page or encoding the
-/// reader assumes (2007 and later files are UTF-8, 2000's are ANSI).
-fn ascii(text: &str) -> Vec<u8> {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        if c.is_ascii() {
-            out.push(c);
-        } else {
-            let mut buffer = [0u16; 2];
-            for unit in c.encode_utf16(&mut buffer) {
-                out.push_str(&format!("\\U+{unit:04X}"));
-            }
-        }
-    }
-    out.into_bytes()
-}
+/// The text as ASCII bytes, with non-ASCII characters as `\U+XXXX`.
+use encode::ascii;
 
 /// The nearest lineweight AutoCAD accepts (hundredths of a millimetre).
 fn weight_code(weight: Lineweight) -> i32 {
@@ -161,10 +143,12 @@ pub fn write_with(document: &Document, extras: Option<&BlockExtras>) -> Result<E
         dim_blocks: HashMap::new(),
         dim_styles: document.dim_styles().iter().map(|_| h.next()).collect(),
         blocks: HashMap::new(),
+        clips: Vec::new(),
     };
     for def in document.blocks() {
         ids.blocks.insert(def.id, h.next());
     }
+    ids.clips = clip::handles(document, &mut h);
     for (id, name) in dimension::block_names(document) {
         ids.dim_blocks.insert(id, (name, h.next()));
     }
@@ -335,8 +319,19 @@ pub fn write_with(document: &Document, extras: Option<&BlockExtras>) -> Result<E
     let mut out = Out::new();
     out.section("HEADER");
     out.pair(9, "$ACADVER");
-    // Multileaders need AutoCAD 2008's file (AC1021); nothing else here does.
-    out.pair(1, if leaders { "AC1021" } else { "AC1015" });
+    // Multileaders need AutoCAD 2008's file (AC1021); a clip frame is a short
+    // (0/1/2) only from R2010 (AC1024), which also holds multileaders.
+    let has_clips = document.xrefs().iter().any(|xref| xref.clip.is_some());
+    out.pair(
+        1,
+        if has_clips {
+            "AC1024"
+        } else if leaders {
+            "AC1021"
+        } else {
+            "AC1015"
+        },
+    );
     out.pair(9, "$ACADMAINTVER");
     out.pair(70, 6);
     out.pair(9, "$DWGCODEPAGE");
@@ -358,6 +353,10 @@ pub fn write_with(document: &Document, extras: Option<&BlockExtras>) -> Result<E
     }
     out.pair(9, "$VISRETAIN");
     out.pair(70, i32::from(document.visretain()));
+    if has_clips {
+        out.pair(9, "$XCLIPFRAME");
+        out.pair(280, i32::from(document.xclip_frame()));
+    }
     let (lo, hi) = match document.model_bounds() {
         Some(b) => (
             (finite(b.min.x)?, finite(b.min.y)?),
@@ -586,6 +585,7 @@ mod tests {
                 layer: walls,
             }],
             blocks: Vec::new(),
+            clip: None,
             report: XrefReport::default(),
         }]);
         doc.add(Entity::Insert(Box::new(Insert::new_xref(
@@ -1257,5 +1257,84 @@ mod tests {
             .unwrap()
             .bytes;
         assert!(String::from_utf8_lossy(&bytes).contains("AC1009"));
+    }
+
+    #[test]
+    fn a_clip_boundary_round_trips_through_the_objects_section() {
+        use std::sync::Arc;
+
+        use opendraft_core::{
+            BlockDef, BlockEntity, BlockObjectId, Insert, XrefClip, XrefDef, XrefKind,
+            XrefPathType, XrefReport,
+        };
+
+        let mut doc = Document::default();
+        let root_id = doc.allocate_block_id();
+        let root = Arc::new(BlockDef {
+            id: root_id,
+            name: "base".into(),
+            base: Point::new(0.0, 0.0),
+            description: String::new(),
+            unit: Default::default(),
+            entities: vec![BlockEntity::new(
+                BlockObjectId(0),
+                Entity::Line {
+                    start: Point::new(0.0, 0.0),
+                    end: Point::new(2.0, 0.0),
+                },
+                Attributes::on_layer(LayerId::DEFAULT),
+            )],
+            dynamic: None,
+        });
+        doc.push_block(root.clone());
+        doc.set_xrefs(vec![XrefDef {
+            block: root_id,
+            path: "base.dwg".into(),
+            path_type: XrefPathType::Relative,
+            kind: XrefKind::Attach,
+            unloaded: false,
+            stamp: None,
+            layers: Vec::new(),
+            blocks: Vec::new(),
+            clip: Some(XrefClip::new(vec![
+                Point::new(0.0, -1.0),
+                Point::new(1.5, -1.0),
+                Point::new(1.5, 1.0),
+                Point::new(0.0, 1.0),
+            ])),
+            report: XrefReport::default(),
+        }]);
+        doc.add(Entity::Insert(Box::new(Insert::new_xref(
+            root,
+            Point::default(),
+        ))));
+        doc.set_xclip_frame(1);
+        doc.validate().unwrap();
+
+        let bytes = super::super::write::write(&doc).unwrap().bytes;
+        dxf::Drawing::load(&mut std::io::Cursor::new(bytes.clone())).expect("a valid DXF");
+        let text = String::from_utf8_lossy(&bytes);
+        for needed in ["ACAD_FILTER", "SPATIAL_FILTER", "$XCLIPFRAME"] {
+            assert!(text.contains(needed), "{needed} is written");
+        }
+        let loaded = crate::dxf::read::read(&bytes).unwrap();
+        assert!(
+            loaded.warnings.iter().all(|w| !w.contains("clip boundary")),
+            "{:?}",
+            loaded.warnings
+        );
+        let clip = loaded.document.xrefs()[0]
+            .clip
+            .as_ref()
+            .expect("the boundary came back");
+        assert!(clip.enabled);
+        assert_eq!(clip.boundary.len(), 4);
+        assert!(
+            (clip.boundary[2].x - 1.5).abs() < 1e-9,
+            "{:?}",
+            clip.boundary
+        );
+        assert_eq!(loaded.document.xclip_frame(), 1);
+        loaded.document.validate().unwrap();
     }
 }

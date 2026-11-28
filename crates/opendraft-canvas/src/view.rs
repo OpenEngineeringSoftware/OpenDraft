@@ -372,6 +372,7 @@ impl View {
             self.paint_axes(&painter, rect, style, document.ccs());
             self.paint_model(&painter, rect, style, document, selection, hover);
             self.paint_xref_markers(&painter, rect, style, document);
+            self.paint_clip_frames(&painter, rect, style, document);
         }
         // Inside a viewport the model is only drawn within its window.
         let painter = match self.clip {

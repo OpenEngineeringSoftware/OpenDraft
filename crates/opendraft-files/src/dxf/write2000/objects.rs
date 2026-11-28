@@ -3,7 +3,7 @@
 
 use opendraft_core::plot::PlotSpace;
 use opendraft_core::{
-    paper_size_name, Document, PaperUnits, PlotArea, PlotRotation, PlotScale, PlotSettings,
+    paper_size_name, Document, Entity, PaperUnits, PlotArea, PlotRotation, PlotScale, PlotSettings,
     ShadePlotMode, ShadeResolution, StandardScale,
 };
 
@@ -113,8 +113,32 @@ pub(super) fn write_objects(
     if leaders {
         super::mleader::styles(out, ids, document, root)?;
     }
+    for (id, handles) in &ids.clips {
+        let Some(object) = document.object(*id) else {
+            continue;
+        };
+        let Entity::Insert(insert) = &object.entity else {
+            continue;
+        };
+        let Some(clip) = document
+            .xref(insert.block.id)
+            .and_then(|xref| xref.clip.as_ref())
+        else {
+            continue;
+        };
+        clip_objects(out, handles, clip);
+    }
     out.end_section();
     Ok(())
+}
+
+/// The clip object graph of one reference, when it has a boundary.
+fn clip_objects(
+    out: &mut Out,
+    handles: &super::clip::ClipHandles,
+    clip: &opendraft_core::XrefClip,
+) {
+    super::clip::objects(out, handles, clip);
 }
 
 /// A `LAYOUT` object: plot settings (sheet size in millimetres) then layout data.

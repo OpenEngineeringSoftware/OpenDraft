@@ -110,6 +110,8 @@ pub struct Document {
     /// `VISRETAIN`: keep host xref-layer properties on reload (true, the
     /// AutoCAD initial value) or take the source's again (false).
     visretain: bool,
+    /// `XCLIPFRAME`: 0 hides clip frames, 1 draws them, 2 draws and plots them.
+    xclip_frame: u8,
     /// Only ever `Some` in a Block Editor's drawing: the dynamic schema being
     /// authored. It is not drawing data: no file holds it, `validate` does not
     /// look at it, `clone_tables` leaves it behind, and BSAVE turns it into
@@ -147,6 +149,8 @@ mod linetypes;
 pub use linetypes::LinetypeUse;
 #[cfg(test)]
 mod bind_tests;
+#[cfg(test)]
+mod clip_tests;
 mod mleader_styles;
 mod modify_settings;
 mod object;
@@ -167,6 +171,7 @@ mod text_styles;
 mod transplant;
 #[cfg(test)]
 mod xref_tests;
+mod xref_validate;
 mod xrefs;
 
 pub use object::Object;

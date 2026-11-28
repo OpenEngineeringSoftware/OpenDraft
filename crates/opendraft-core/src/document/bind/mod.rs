@@ -108,6 +108,9 @@ impl<'a> Binder<'a> {
         let name = self.xref_name(root);
         let root_def = self.doc.block(root).ok_or(BindError::NotAnXref(root))?;
         self.check_content(&name, root_def)?;
+        if record.clip.is_some() {
+            return Err(BindError::Clipped { reference: name });
+        }
         self.dropped.insert(root);
         for bound in &record.layers {
             self.plan_layer(&name, &bound.source, bound.layer);

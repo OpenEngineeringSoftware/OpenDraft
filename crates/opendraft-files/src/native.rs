@@ -280,6 +280,9 @@ struct DrawingDto {
     /// `VISRETAIN`; absent means true, the AutoCAD initial value.
     #[serde(default = "xref::yes", skip_serializing_if = "xref::is_true")]
     visretain: bool,
+    /// `XCLIPFRAME`; absent means 2 (frames drawn and plotted).
+    #[serde(default = "xref::two", skip_serializing_if = "xref::is_two")]
+    xclip_frame: u8,
     /// External references, one per root block.
     #[serde(
         default,
@@ -425,6 +428,7 @@ impl DrawingDto {
             next_block_id: document.next_block_id(),
             insert_base: entity::point(document.insert_base()),
             visretain: document.visretain(),
+            xclip_frame: document.xclip_frame(),
             xrefs,
             next_attribute_definition_id: document.next_attribute_definition_id(),
             linetypes: linetype::TableDto::of(document),
@@ -1776,6 +1780,12 @@ mod tests {
                 layer: walls,
             }],
             blocks: vec![local],
+            clip: Some(opendraft_core::XrefClip::new(vec![
+                Point::new(-1.0, -1.0),
+                Point::new(4.0, -1.0),
+                Point::new(4.0, 2.0),
+                Point::new(-1.0, 2.0),
+            ])),
             report: XrefReport {
                 model_entities: 2,
                 local_blocks: 1,
@@ -1785,6 +1795,7 @@ mod tests {
         }]);
         doc.set_insert_base(Point::new(1.5, -2.0));
         doc.set_visretain(false);
+        doc.set_xclip_frame(0);
         doc.add(Entity::Insert(Box::new(Insert::new_xref(
             root,
             Point::new(10.0, 0.0),
@@ -1806,6 +1817,13 @@ mod tests {
         assert!(!read.visretain());
         assert_eq!(read.insert_base(), Point::new(1.5, -2.0));
         assert_eq!(read.xrefs()[0].blocks.len(), 1);
+        let clip = read.xrefs()[0]
+            .clip
+            .as_ref()
+            .expect("the clip boundary came back");
+        assert!(clip.enabled);
+        assert_eq!(clip.boundary[2], Point::new(4.0, 2.0));
+        assert_eq!(read.xclip_frame(), 0);
     }
 
     #[test]

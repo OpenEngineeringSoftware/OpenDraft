@@ -77,6 +77,43 @@ impl Action for SetVisretain {
     }
 }
 
+/// Set `XCLIPFRAME` (whether clip frames draw, and whether they plot).
+pub struct SetXclipFrame {
+    name: String,
+    value: u8,
+}
+
+impl SetXclipFrame {
+    pub fn new(name: impl Into<String>, value: u8) -> Self {
+        Self {
+            name: name.into(),
+            value: value.min(2),
+        }
+    }
+
+    fn swap(&mut self, doc: &mut Document) {
+        self.value = doc.set_xclip_frame(self.value);
+    }
+}
+
+impl Action for SetXclipFrame {
+    fn name(&self) -> String {
+        self.name.clone()
+    }
+
+    fn apply(&mut self, doc: &mut Document) {
+        self.swap(doc);
+    }
+
+    fn revert(&mut self, doc: &mut Document) {
+        self.swap(doc);
+    }
+
+    fn changes(&self) -> Changes {
+        Changes::xrefs()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -102,6 +139,18 @@ mod tests {
         assert!(!doc.visretain());
         action.revert(&mut doc);
         assert!(doc.visretain());
+        assert!(action.changes().xrefs);
+    }
+
+    #[test]
+    fn xclipframe_changes_and_comes_back() {
+        let mut doc = Document::default();
+        assert_eq!(doc.xclip_frame(), 2);
+        let mut action = SetXclipFrame::new("Clip frame", 1);
+        action.apply(&mut doc);
+        assert_eq!(doc.xclip_frame(), 1);
+        action.revert(&mut doc);
+        assert_eq!(doc.xclip_frame(), 2);
         assert!(action.changes().xrefs);
     }
 }

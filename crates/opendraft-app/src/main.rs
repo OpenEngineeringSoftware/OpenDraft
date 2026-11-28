@@ -236,9 +236,11 @@ mod wblock_cmd;
 mod whats_new;
 mod window_memory;
 mod xbind_cmd;
+mod xclip_cmd;
 mod xline_cmd;
 mod xref_apply;
 mod xref_cmd;
+mod xref_defaults;
 mod xref_load;
 mod zoom_cmd;
 

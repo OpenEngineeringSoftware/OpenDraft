@@ -68,6 +68,7 @@ pub(super) fn records(
             stamp: None,
             layers,
             blocks: Vec::new(),
+            clip: None,
             report: XrefReport::default(),
         });
     }

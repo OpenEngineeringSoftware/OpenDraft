@@ -148,6 +148,19 @@ impl PanelViewer<'_> {
                     });
                 }
             }
+            if ui
+                .add_enabled(selected.is_some(), egui::Button::new(key!("Clip")))
+                .on_disabled_hover_text(key!("Select an external reference to clip."))
+                .clicked()
+            {
+                if let Some(block) = selected {
+                    self.state.start_command("XCLIP", move |ed| {
+                        let inserts = ed.read(move |doc| doc.xref_references(block))?;
+                        ed.select(inserts);
+                        crate::xclip_cmd::xclip(ed)
+                    });
+                }
+            }
             if ui.button(key!("Refresh")).clicked() {
                 ui.data_mut(|data| data.remove::<Cache>(id));
                 ui.ctx().request_repaint();
@@ -353,6 +366,7 @@ mod tests {
             stamp,
             layers: Vec::new(),
             blocks: Vec::new(),
+            clip: None,
             report: XrefReport::default(),
         }
     }

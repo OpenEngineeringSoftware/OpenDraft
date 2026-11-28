@@ -90,6 +90,7 @@ fn sample() -> (Document, LayerId, LayerId) {
             layer: walls,
         }],
         blocks: vec![local()],
+        clip: None,
         report: Default::default(),
     };
     doc.set_xrefs(vec![xref]);

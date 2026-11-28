@@ -63,8 +63,19 @@ pub(super) struct XrefDto {
         deserialize_with = "limits::table_rows"
     )]
     blocks: Vec<BlockDto>,
+    /// The `XCLIP` boundary, when the reference has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    clip: Option<ClipDto>,
     #[serde(default, skip_serializing_if = "ReportDto::is_empty")]
     report: ReportDto,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ClipDto {
+    #[serde(deserialize_with = "limits::table_rows")]
+    points: Vec<[f64; 2]>,
+    #[serde(default = "yes")]
+    enabled: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -175,6 +186,10 @@ impl XrefDto {
                 })
                 .collect(),
             blocks,
+            clip: xref.clip.as_ref().map(|clip| ClipDto {
+                points: clip.boundary.iter().map(|p| [p.x, p.y]).collect(),
+                enabled: clip.enabled,
+            }),
             report: ReportDto {
                 model_entities: xref.report.model_entities,
                 local_blocks: xref.report.local_blocks,
@@ -215,6 +230,14 @@ impl XrefDto {
                 })
                 .collect(),
             blocks: locals,
+            clip: self.clip.map(|clip| opendraft_core::XrefClip {
+                boundary: clip
+                    .points
+                    .into_iter()
+                    .map(|[x, y]| opendraft_core::Point::new(x, y))
+                    .collect(),
+                enabled: clip.enabled,
+            }),
             report: XrefReport {
                 model_entities: self.report.model_entities,
                 local_blocks: self.report.local_blocks,
@@ -244,6 +267,16 @@ pub(super) fn is_true(value: &bool) -> bool {
 /// `VISRETAIN`'s value when a file does not say.
 pub(super) fn yes() -> bool {
     true
+}
+
+/// `XCLIPFRAME`'s initial value, for leaving it out.
+pub(super) fn two() -> u8 {
+    2
+}
+
+/// Whether `XCLIPFRAME` is the initial value, for leaving it out.
+pub(super) fn is_two(value: &u8) -> bool {
+    *value == 2
 }
 
 /// Every block an insert may name while a drawing is written: the host table

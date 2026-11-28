@@ -19,11 +19,13 @@ pub(super) fn apply<'a>(
     tilted
 }
 
-/// `$INSBASE` and `$VISRETAIN`, which an external-reference snapshot needs.
+/// `$INSBASE`, `$VISRETAIN` and `$XCLIPFRAME`, which an external-reference
+/// snapshot needs.
 fn apply_xrefs<'a>(groups: impl Iterator<Item = (i32, &'a str)>, document: &mut Document) {
     let mut name = "";
     let mut base = opendraft_core::Point::default();
     let mut visretain = None;
+    let mut clip_frame = None;
     for (code, value) in groups {
         if code == 9 {
             name = value;
@@ -33,6 +35,7 @@ fn apply_xrefs<'a>(groups: impl Iterator<Item = (i32, &'a str)>, document: &mut 
             ("$INSBASE", 10) => base.x = value.trim().parse().unwrap_or(0.0),
             ("$INSBASE", 20) => base.y = value.trim().parse().unwrap_or(0.0),
             ("$VISRETAIN", 70) => visretain = value.trim().parse::<i32>().ok(),
+            ("$XCLIPFRAME", 70 | 280) => clip_frame = value.trim().parse::<u8>().ok(),
             _ => {}
         }
     }
@@ -41,5 +44,8 @@ fn apply_xrefs<'a>(groups: impl Iterator<Item = (i32, &'a str)>, document: &mut 
     }
     if let Some(keep) = visretain {
         document.set_visretain(keep != 0);
+    }
+    if let Some(frame) = clip_frame {
+        document.set_xclip_frame(frame);
     }
 }

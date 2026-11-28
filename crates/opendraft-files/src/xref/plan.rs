@@ -148,6 +148,9 @@ pub fn plan_xref(
     let linetypes = planner.linetypes_plan.take();
     let kind = planner.kind;
     report.notes.extend(notes);
+    // A reload keeps the reference's clip boundary: the boundary lives on the
+    // host, in block coordinates the source's units do not change.
+    let clip = planner.existing.as_ref().and_then(|old| old.clip.clone());
     let xref = XrefDef {
         block: root_id,
         path: saved,
@@ -157,6 +160,7 @@ pub fn plan_xref(
         stamp: None,
         layers,
         blocks: planner.locals(),
+        clip,
         report: report.capped(),
     };
     Ok(XrefPlan {
@@ -461,6 +465,7 @@ mod tests {
                 layer: walls,
             }],
             blocks: Vec::new(),
+            clip: None,
             report: XrefReport::default(),
         }]);
         source.add(Entity::Insert(Box::new(Insert::new_xref(
@@ -507,6 +512,7 @@ mod tests {
                 layer,
             }],
             blocks: Vec::new(),
+            clip: None,
             report: XrefReport::default(),
         }]);
         (host, layer, root_id)
