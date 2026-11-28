@@ -1,12 +1,14 @@
-//! The handle on a detached panel's window that drags it back into the dock.
-//! The title bar is the system's, and a drag of it gives the app no release
-//! to act on, so docking is done from this handle: the window follows the
-//! pointer (shrunk to its strip, so it does not hide the drop targets drawn
-//! in the main window) and the release says where it goes.
+//! The header of a detached panel's window, which also drags it back into the
+//! dock. The window has no system title bar (see `detached_frame`), so the
+//! header moves it: the window follows the pointer, shrunk to just the header
+//! while it is over the main window so it does not hide the drop targets drawn
+//! there, and the release says where it goes. (A system title bar would not
+//! do: its move loop gives the app no release to act on.)
 
 use eframe::egui::{self, Pos2, Vec2};
 use opendraft_ui::{icons, widgets, Theme};
 
+use crate::detached::LEAST;
 use crate::dock::PanelTab;
 
 /// The window while it is carried: just its header.
@@ -34,12 +36,9 @@ pub(super) struct Moved {
     pub released: bool,
 }
 
-/// The least size of a panel's window.
-pub(super) const LEAST: [f32; 2] = [200.0, 120.0];
-
 /// Whether the app can place a window where it likes. Wayland lets only the
-/// compositor do that, so there the handle is not offered and the Dock
-/// button is the way back.
+/// compositor do that, so there the header moves the window by asking the
+/// compositor (no docking by dragging) and the dock icon is the way back.
 fn can_place_windows() -> bool {
     !cfg!(target_os = "linux") || std::env::var_os("WAYLAND_DISPLAY").is_none()
 }
@@ -51,10 +50,10 @@ pub(super) struct Header {
     pub moved: Option<Moved>,
 }
 
-/// The header of a detached window: the panel's title and a Dock button, in
-/// the tone of a docked tab bar. The title and the space beside it are the
-/// handle that carries the window back to the dock (a double click docks it
-/// where it was).
+/// The header of a detached window: the panel's title, a dock icon and a close
+/// button, in the tone of a docked tab bar. The title and the space beside it
+/// are the handle that carries the window (a double click docks it where it
+/// was).
 pub(super) fn header(ctx: &egui::Context, theme: &Theme, panel: PanelTab, title: &str) -> Header {
     let mut out = Header {
         dock: false,
@@ -72,10 +71,19 @@ pub(super) fn header(ctx: &egui::Context, theme: &Theme, panel: PanelTab, title:
         .show(ctx, |ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let side = ui.spacing().interact_size.y;
-                if widgets::icon_button(ui, theme, icons::PANEL_WINDOW_CLOSE, "Close").clicked() {
+                if widgets::icon_button(
+                    ui,
+                    theme,
+                    icons::PANEL_WINDOW_CLOSE,
+                    &rust_i18n::t!("Close"),
+                )
+                .clicked()
+                {
                     out.close = true;
                 }
-                if widgets::icon_button(ui, theme, icons::PANEL_DOCK, "Dock").clicked() {
+                if widgets::icon_button(ui, theme, icons::PANEL_DOCK, &rust_i18n::t!("Dock"))
+                    .clicked()
+                {
                     out.dock = true;
                 }
                 let space = egui::vec2(ui.available_width(), side);
@@ -89,10 +97,17 @@ pub(super) fn header(ctx: &egui::Context, theme: &Theme, panel: PanelTab, title:
                     c.text,
                 );
                 // No tooltip while carrying: it would hang over the drop targets.
-                let grip = grip.on_hover_cursor(egui::CursorIcon::Grab);
+                let cursor = match grip.dragged() {
+                    true => egui::CursorIcon::Grabbing,
+                    false => egui::CursorIcon::Grab,
+                };
+                let grip = grip.on_hover_cursor(cursor);
+                if grip.dragged() {
+                    ui.ctx().set_cursor_icon(cursor);
+                }
                 let grip = match grip.dragged() {
                     true => grip,
-                    false => grip.on_hover_text("Drag to dock, or double-click"),
+                    false => grip.on_hover_text(rust_i18n::t!("Drag to dock, or double-click")),
                 };
                 out.dock |= grip.double_clicked();
                 out.moved = carry(ui.ctx(), &grip, panel);

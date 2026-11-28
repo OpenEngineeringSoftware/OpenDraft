@@ -318,7 +318,7 @@ The table, dashed drawing, scales, DXF/DWG patterns and the Linetype Manager are
 
 ## Plan: detachable windows
 
-Planned 27-11-2026. Steps 1 (dialogs), 2 (panels), 3 (keys) and 4 (drag back) are built; step 5 is not. Without the setting every window (Settings, Layer Properties, Plot and the rest) is an `egui::Window` drawn inside the main OS window, so it cannot be moved onto a second monitor. Wanted: dialogs and dock panels that can become real OS windows and be docked back, as in AutoCAD.
+Planned 27-11-2026. Steps 1 (dialogs), 2 (panels), 3 (keys) and 4 (drag back) are built, with the app-drawn frame, "on by default" and Bring Windows Back (all 28-11-2026); step 5, the hand tests on other machines, is not done. Without the setting every window (Settings, Layer Properties, Plot and the rest) is an `egui::Window` drawn inside the main OS window, so it cannot be moved onto a second monitor. Wanted: dialogs and dock panels that can become real OS windows and be docked back, as in AutoCAD.
 
 **Decisions**
 - A window leaves the main window as an egui *viewport* (`ctx.show_viewport_immediate`, eframe 0.31 with glow). The native OS frame is kept for the main window and for dialogs; a detached panel's window has a frame the app draws (see "The frame of a detached window" below); a custom main window frame was looked at and parked (see below).
@@ -345,7 +345,7 @@ Planned 27-11-2026. Steps 1 (dialogs), 2 (panels), 3 (keys) and 4 (drag back) ar
 
 **Exit test:** with the setting on, Settings and Layers open as windows that can be dragged onto a second monitor, stay above the main window while the app is the active program, come back where they were after a restart, and dock back with the button; with the setting off nothing changes.
 
-**Not decided:** whether one setting covers dialogs and panels; whether the setting defaults on once it works; which panels besides the Drawing view cannot detach; grouping several panels in one detached window.
+**Decided 28-11-2026:** one setting covers dialogs and panels (`popout_windows`), and it is on by default. **Not decided:** which panels besides the Drawing view cannot detach; grouping several panels in one detached window; whether dialogs get the app-drawn frame too.
 
 **Risks not yet tried:** glow with several windows (resize flicker, multisampling); a popup taller than a small dialog is cut off at the window's edge; the app's one zoom factor with windows on monitors of different scale; Linux window managers that ignore a requested position; closing a window while a command is running.
 

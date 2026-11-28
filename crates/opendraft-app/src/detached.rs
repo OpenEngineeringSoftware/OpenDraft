@@ -16,8 +16,13 @@ const KEY: &str = "detached_panels_v1";
 /// The size a panel's window opens at when it has none yet.
 pub const DEFAULT_SIZE: [f32; 2] = [380.0, 520.0];
 
-/// The smallest a brought-back window is made.
-const LEAST: [f32; 2] = [200.0, 120.0];
+/// The least size of a panel's window.
+pub const LEAST: [f32; 2] = [200.0, 120.0];
+
+/// The least size a panel's window opens at when it comes out of the dock:
+/// the dock's own window is small, and a window of the OS needs room for its
+/// header and a readable panel.
+pub const OPENS_AT_LEAST: [f32; 2] = [300.0, 260.0];
 
 /// One detached panel and where its window was last, in logical pixels of
 /// the screen. `at` is `None` until the window has a position.

@@ -6,7 +6,7 @@ use egui_dock::DockState;
 use super::detached_drag;
 use super::panels::PanelViewer;
 use super::OpenDraftApp;
-use crate::detached::{Detached, DEFAULT_SIZE};
+use crate::detached::{Detached, DEFAULT_SIZE, LEAST, OPENS_AT_LEAST};
 use crate::dock::{self, LayoutRequest, PanelTab};
 
 /// What the windows asked for this frame.
@@ -75,9 +75,12 @@ fn settle(
         .input(|i| i.viewport().inner_rect.or(i.viewport().outer_rect))
         .map(|r| r.min.to_vec2());
     for (panel, rect) in dock::floating(dock, ctx) {
-        // The dock's window is small (0.8 of the docked size); a window of
-        // the OS needs room for its header and a readable panel.
-        let big = |r: egui::Rect| [r.width().max(300.0), r.height().max(260.0)];
+        let big = |r: egui::Rect| {
+            [
+                r.width().max(OPENS_AT_LEAST[0]),
+                r.height().max(OPENS_AT_LEAST[1]),
+            ]
+        };
         let (at, size) = match (rect, origin) {
             (Some(r), Some(o)) => {
                 let p = r.min + o;
@@ -110,7 +113,7 @@ fn show(
         let mut builder = egui::ViewportBuilder::default()
             .with_title(title.as_str())
             .with_inner_size(size)
-            .with_min_inner_size(detached_drag::LEAST)
+            .with_min_inner_size(LEAST)
             .with_decorations(false)
             .with_taskbar(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop);
@@ -121,7 +124,7 @@ fn show(
         let mut seen = None;
         let mut tab = panel;
         ctx.show_viewport_immediate(id, builder, |ctx, _class| {
-            keep_above_main(ctx, panel);
+            opendraft_ui::widgets::keep_above_main(ctx, egui::Id::new(("panel_window_top", panel)));
             // Typing with nothing focused here goes to the command line, as
             // in the main window; where that is this window, focus it first.
             let had_focus = ctx.wants_keyboard_input();
@@ -182,25 +185,6 @@ fn unused_keys(ctx: &egui::Context, panel: PanelTab) -> Vec<egui::Event> {
             .cloned()
             .collect()
     })
-}
-
-/// Above the main window while this program is the active one, an ordinary
-/// window when another program is (so it does not cover that program).
-fn keep_above_main(ctx: &egui::Context, panel: PanelTab) {
-    let mine = ctx.input(|i| i.viewport().focused).unwrap_or(false);
-    let root = ctx
-        .input_for(egui::ViewportId::ROOT, |i| i.viewport().focused)
-        .unwrap_or(false);
-    let top = mine || root;
-    let key = egui::Id::new(("panel_window_top", panel));
-    if ctx.data(|d| d.get_temp::<bool>(key)) != Some(top) {
-        ctx.data_mut(|d| d.insert_temp(key, top));
-        ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(if top {
-            egui::WindowLevel::AlwaysOnTop
-        } else {
-            egui::WindowLevel::Normal
-        }));
-    }
 }
 
 /// Settle which panels are windows, show them, and act on their buttons.

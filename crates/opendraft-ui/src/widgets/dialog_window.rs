@@ -17,6 +17,26 @@ pub fn set_dialogs_in_windows(ctx: &egui::Context, on: bool) {
     ctx.data_mut(|d| d.insert_temp(mode_id(), on));
 }
 
+/// Keep the window `ctx` is drawing above the main window while this program
+/// is the active one, and an ordinary window when another program is (so it
+/// does not cover that program). `key` is the window's own, to remember which
+/// it is in.
+pub fn keep_above_main(ctx: &egui::Context, key: egui::Id) {
+    let mine = ctx.input(|i| i.viewport().focused).unwrap_or(false);
+    let root = ctx
+        .input_for(egui::ViewportId::ROOT, |i| i.viewport().focused)
+        .unwrap_or(false);
+    let top = mine || root;
+    if ctx.data(|d| d.get_temp::<bool>(key)) != Some(top) {
+        ctx.data_mut(|d| d.insert_temp(key, top));
+        ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(if top {
+            egui::WindowLevel::AlwaysOnTop
+        } else {
+            egui::WindowLevel::Normal
+        }));
+    }
+}
+
 fn epoch_id() -> egui::Id {
     egui::Id::new("dialog_positions_epoch")
 }
@@ -91,22 +111,7 @@ pub(super) fn dialog_window<R>(
     let mut result = None;
     let mut used = None;
     ctx.show_viewport_immediate(id, builder, |ctx, _class| {
-        // Above the main window while the app is the active program; an
-        // ordinary window when another program is (so it does not cover it).
-        let mine = ctx.input(|i| i.viewport().focused).unwrap_or(false);
-        let root = ctx
-            .input_for(egui::ViewportId::ROOT, |i| i.viewport().focused)
-            .unwrap_or(false);
-        let top = mine || root;
-        let level_id = egui::Id::new(("dialog_vp_top", title));
-        if ctx.data(|d| d.get_temp::<bool>(level_id)) != Some(top) {
-            ctx.data_mut(|d| d.insert_temp(level_id, top));
-            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(if top {
-                egui::WindowLevel::AlwaysOnTop
-            } else {
-                egui::WindowLevel::Normal
-            }));
-        }
+        keep_above_main(ctx, egui::Id::new(("dialog_vp_top", title)));
         if let Some(outer) = ctx.input(|i| i.viewport().outer_rect) {
             ctx.data_mut(|d| d.insert_temp(last_pos_id, (outer.min, epoch_now)));
         }
