@@ -332,6 +332,7 @@ icons! {
     VIEW_PAN = '\u{e1d6}';
     VIEW_PANEL_PROPERTIES = '\u{e37a}';
     VIEW_RESET_LAYOUT = '\u{e2a0}';
+    VIEW_BRING_WINDOWS_BACK = '\u{e42a}';
     VIEW_NAV_GIZMO = '\u{e09f}';
     VIEW_SNAP = '\u{e2b4}';
     VIEW_ZOOM_EXTENTS = '\u{e115}';

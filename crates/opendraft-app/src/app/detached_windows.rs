@@ -30,7 +30,7 @@ impl OpenDraftApp {
 
     /// The layout change a command asked for. One about a panel that is in a
     /// window of its own is for that window, not for the dock.
-    pub(super) fn apply_layout_request(&mut self) {
+    pub(super) fn apply_layout_request(&mut self, ctx: &egui::Context) {
         let Some(request) = self.state.layout_request.take() else {
             return;
         };
@@ -41,6 +41,11 @@ impl OpenDraftApp {
             }
             LayoutRequest::Toggle(panel) if self.detached.contains(panel) => {
                 self.detached.remove(panel);
+                true
+            }
+            LayoutRequest::BringBack => {
+                self.detached.ask_bring_back();
+                opendraft_ui::widgets::bring_dialogs_back(ctx);
                 true
             }
             LayoutRequest::Toggle(_) | LayoutRequest::Float(_) => false,
@@ -208,6 +213,12 @@ pub(super) fn run(
     viewer: &mut PanelViewer<'_>,
 ) {
     settle(ctx, on, dock, places, detached);
+    if detached.take_bring_back() {
+        // Over the main window, wherever the windows were left.
+        if let Some(main) = ctx.input(|i| i.viewport().inner_rect) {
+            detached.bring_back(main);
+        }
+    }
     let asked = show(ctx, fill, detached, viewer);
     if let Some((panel, moved)) = asked.moved {
         let main = ctx.input(|i| i.viewport().inner_rect);

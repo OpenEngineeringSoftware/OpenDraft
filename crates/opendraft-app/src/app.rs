@@ -381,7 +381,7 @@ impl eframe::App for OpenDraftApp {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.apply_layout_request();
+        self.apply_layout_request(ctx);
         if !self.io_waker_set {
             // A finished file job wakes the window to collect it.
             let ctx = ctx.clone();

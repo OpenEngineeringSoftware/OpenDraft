@@ -302,6 +302,7 @@ The starting drawings are Lucide's (ISC licence, `LICENSE-Lucide.txt`).
 | ![](view-pan.svg) | `view-pan.svg` | hand | Pan |
 | ![](view-panel-properties.svg) | `view-panel-properties.svg` | rectangle-vertical | Properties |
 | ![](view-reset-layout.svg) | `view-reset-layout.svg` | undo-2 | Reset Layout |
+| ![](view-bring-windows-back.svg) | `view-bring-windows-back.svg` | app-window | Bring Windows Back |
 | ![](view-nav-gizmo.svg) | `view-nav-gizmo.svg` | compass | Gizmo |
 | ![](view-snap.svg) | `view-snap.svg` | magnet | Snap |
 | ![](view-zoom-extents.svg) | `view-zoom-extents.svg` | maximize | Zoom Extents |

@@ -13,10 +13,12 @@ mod drag;
 mod places;
 mod sizes;
 mod targets;
+mod windows;
 
 pub use drag::{offer_detached, show_area};
 pub use places::Places;
 pub use sizes::{keep_minimum_sizes, split_shares};
+pub use windows::{dock_back, floating};
 
 // Bumped when a new default panel is added, so saved layouts pick it up.
 const LAYOUT_KEY: &str = "dock_layout_v4";
@@ -58,6 +60,9 @@ pub enum LayoutRequest {
     Toggle(PanelTab),
     /// Take a docked panel out into a window of its own.
     Float(PanelTab),
+    /// Put the windows of the app (detached panels, dialogs) back where they
+    /// can be seen. Nothing in the dock changes.
+    BringBack,
 }
 
 /// Share of the window width kept by the Properties column on the left.
@@ -237,38 +242,8 @@ pub fn apply(dock: &mut DockState<PanelTab>, places: &mut Places, request: Layou
             }
         }
         LayoutRequest::Float(panel) => float(dock, panel),
+        LayoutRequest::BringBack => {}
     }
-}
-
-/// The panels in the dock's own floating windows, with each window's inside
-/// in the main window's coordinates when egui knows it.
-pub fn floating(
-    dock: &DockState<PanelTab>,
-    ctx: &egui::Context,
-) -> Vec<(PanelTab, Option<egui::Rect>)> {
-    dock.iter_all_tabs()
-        .filter(|((surface, _), tab)| {
-            *surface != egui_dock::SurfaceIndex::main() && tab.closeable()
-        })
-        .map(|((surface, _), tab)| (*tab, places::window_rect(ctx, surface)))
-        .collect()
-}
-
-/// Show a hidden panel docked in the main area, where it was or where the
-/// default layout keeps it, never in a floating window.
-pub fn dock_back(dock: &mut DockState<PanelTab>, places: &mut Places, panel: PanelTab) {
-    if dock.find_tab(&panel).is_some() {
-        return;
-    }
-    if places.restore(dock, panel) {
-        match dock.find_tab(&panel) {
-            Some(found) if found.0 != egui_dock::SurfaceIndex::main() => {
-                dock.remove_tab(found);
-            }
-            _ => return,
-        }
-    }
-    restore(dock, panel);
 }
 
 /// Move a panel docked in the main area to a window just above its place.
@@ -439,6 +414,9 @@ pub fn commands() -> Vec<Command<AppState>> {
         }),
         toggle("view.reset_layout", "Reset Layout", |s| {
             s.layout_request = Some(LayoutRequest::Reset)
+        }),
+        toggle("view.bring_windows_back", "Bring Windows Back", |s| {
+            s.layout_request = Some(LayoutRequest::BringBack)
         }),
     ]
 }
