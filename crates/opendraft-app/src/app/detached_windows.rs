@@ -71,7 +71,7 @@ fn settle(
         .map(|r| r.min.to_vec2());
     for (panel, rect) in dock::floating(dock, ctx) {
         // The dock's window is small (0.8 of the docked size); a window of
-        // the OS needs room for its Dock strip and a readable panel.
+        // the OS needs room for its header and a readable panel.
         let big = |r: egui::Rect| [r.width().max(300.0), r.height().max(260.0)];
         let (at, size) = match (rect, origin) {
             (Some(r), Some(o)) => {
@@ -89,7 +89,7 @@ fn settle(
 }
 
 /// Show each detached panel in its window. The panel draws itself as it
-/// does in the dock; a strip above it holds the Dock button.
+/// does in the dock; a header above it holds its title and the Dock button.
 fn show(
     ctx: &egui::Context,
     fill: egui::Color32,
@@ -100,9 +100,10 @@ fn show(
     for w in detached.windows().to_vec() {
         let panel = w.panel;
         let (at, size) = detached.start(&w);
-        let title = opendraft_ui::i18n::tr(panel.title());
+        let theme = viewer.theme;
+        let title = opendraft_ui::i18n::tr(panel.title()).to_string();
         let mut builder = egui::ViewportBuilder::default()
-            .with_title(title.to_string())
+            .with_title(title.as_str())
             .with_inner_size(size)
             .with_min_inner_size(detached_drag::LEAST)
             .with_window_level(egui::WindowLevel::AlwaysOnTop);
@@ -120,22 +121,9 @@ fn show(
             if panel == PanelTab::CommandLine && !had_focus && typed_text(ctx) {
                 viewer.state.cmdline.focus = true;
             }
-            egui::TopBottomPanel::top(egui::Id::new(("dock_strip", panel)))
-                .frame(
-                    egui::Frame::NONE
-                        .fill(fill)
-                        .inner_margin(egui::Margin::symmetric(6, 3)),
-                )
-                .show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        if ui.button(opendraft_ui::i18n::tr("Dock")).clicked() {
-                            asked.dock.push(panel);
-                        }
-                        if let Some(moved) = detached_drag::handle(ui, panel) {
-                            asked.moved = Some((panel, moved));
-                        }
-                    });
-                });
+            let header = detached_drag::header(ctx, theme, panel, &title);
+            asked.dock.extend(header.dock.then_some(panel));
+            asked.moved = header.moved.map(|m| (panel, m));
             egui::CentralPanel::default()
                 .frame(egui::Frame::NONE.fill(fill))
                 .show(ctx, |ui| {

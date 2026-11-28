@@ -284,6 +284,8 @@ icons! {
     OSNAP_PERPENDICULAR = '\u{e0ec}';
     OSNAP_QUADRANT = '\u{e0ec}';
     OSNAP_TANGENT = '\u{e0ec}';
+    /// Dock a panel that is in a window of its own back into the main window.
+    PANEL_DOCK = '\u{e5d7}';
     PANEL_SECTION_CLOSED = '\u{e073}';
     PANEL_SECTION_OPEN = '\u{e071}';
     POWER_SELECT_PICK = '\u{e1c2}';

@@ -62,7 +62,7 @@ The starting drawings are Lucide's (ISC licence, `LICENSE-Lucide.txt`).
 | ![](block-eattedit.svg) | `block-eattedit.svg` | list | Multiple |
 | ![](block-edit.svg) | `block-edit.svg` | pencil | Edit |
 | ![](block-insert.svg) | `block-insert.svg` | box | Insert |
-| ![](block-library.svg) | `block-library.svg` | library | Content Manager |
+| ![](block-library.svg) | `block-library.svg` | library | Content Manager, content_manager/list.rs |
 | ![](block-parameter.svg) | `block-parameter.svg` | ruler | Parameter |
 | ![](block-purge.svg) | `block-purge.svg` | eraser | Purge |
 | ![](block-reset.svg) | `block-reset.svg` | rotate-ccw | Reset |
@@ -70,15 +70,15 @@ The starting drawings are Lucide's (ISC licence, `LICENSE-Lucide.txt`).
 | ![](combo-arrow.svg) | `combo-arrow.svg` | chevron-down | menu.rs |
 | ![](command-line-collapse.svg) | `command-line-collapse.svg` | chevron-down | app/command_line.rs |
 | ![](command-line-expand.svg) | `command-line-expand.svg` | chevron-right | app/command_line.rs |
-| ![](content-back.svg) | `content-back.svg` | arrow-left | (not used) |
-| ![](content-drawing.svg) | `content-drawing.svg` | file-box | (not used) |
-| ![](content-favourite.svg) | `content-favourite.svg` | star | (not used) |
-| ![](content-folder.svg) | `content-folder.svg` | folder | (not used) |
-| ![](content-forward.svg) | `content-forward.svg` | arrow-right | (not used) |
-| ![](content-recent.svg) | `content-recent.svg` | history | (not used) |
-| ![](content-rename.svg) | `content-rename.svg` | pencil | (not used) |
-| ![](content-trash.svg) | `content-trash.svg` | trash-2 | (not used) |
-| ![](content-up.svg) | `content-up.svg` | arrow-up | (not used) |
+| ![](content-back.svg) | `content-back.svg` | arrow-left | content_manager/mod.rs |
+| ![](content-drawing.svg) | `content-drawing.svg` | file-box | content_manager/tree.rs |
+| ![](content-favourite.svg) | `content-favourite.svg` | star | content_manager/contents.rs, content_manager/tree.rs |
+| ![](content-folder.svg) | `content-folder.svg` | folder | content_manager/contents.rs, content_manager/tree.rs |
+| ![](content-forward.svg) | `content-forward.svg` | arrow-right | content_manager/mod.rs |
+| ![](content-recent.svg) | `content-recent.svg` | history | content_manager/tree.rs |
+| ![](content-rename.svg) | `content-rename.svg` | pencil | content_manager/name_edit.rs, content_manager/unit_menu.rs |
+| ![](content-trash.svg) | `content-trash.svg` | trash-2 | content_manager/tree.rs |
+| ![](content-up.svg) | `content-up.svg` | arrow-up | content_manager/mod.rs |
 | ![](context-deselect-all.svg) | `context-deselect-all.svg` | square-x | app/context_menu.rs |
 | ![](context-edit-select-all.svg) | `context-edit-select-all.svg` | mouse-pointer-2 | app/context_menu.rs |
 | ![](context-find.svg) | `context-find.svg` | search | app/context_menu.rs |
@@ -172,8 +172,8 @@ The starting drawings are Lucide's (ISC licence, `LICENSE-Lucide.txt`).
 | ![](home-more.svg) | `home-more.svg` | ellipsis | app/home_page/controls.rs |
 | ![](home-pin.svg) | `home-pin.svg` | pin | app/home_page/cards.rs, app/home_page/controls.rs |
 | ![](home-template.svg) | `home-template.svg` | layout-template | app/home_page/start.rs |
-| ![](home-view-grid.svg) | `home-view-grid.svg` | layout-grid | app/home_page/recent.rs |
-| ![](home-view-list.svg) | `home-view-list.svg` | list | app/home_page/recent.rs |
+| ![](home-view-grid.svg) | `home-view-grid.svg` | layout-grid | app/home_page/recent.rs, content_manager/mod.rs |
+| ![](home-view-list.svg) | `home-view-list.svg` | list | app/home_page/recent.rs, content_manager/mod.rs |
 | ![](inquiry-angle.svg) | `inquiry-angle.svg` | triangle-right | Angle |
 | ![](inquiry-area.svg) | `inquiry-area.svg` | square | Area |
 | ![](inquiry-distance.svg) | `inquiry-distance.svg` | ruler | Distance |
@@ -258,6 +258,7 @@ The starting drawings are Lucide's (ISC licence, `LICENSE-Lucide.txt`).
 | ![](osnap-perpendicular.svg) | `osnap-perpendicular.svg` | grid-3x3 | app/status_toggles.rs |
 | ![](osnap-quadrant.svg) | `osnap-quadrant.svg` | grid-3x3 | app/status_toggles.rs |
 | ![](osnap-tangent.svg) | `osnap-tangent.svg` | grid-3x3 | app/status_toggles.rs |
+| ![](panel-dock.svg) | `panel-dock.svg` | dock | app/detached_drag.rs (Dock a panel that is in a window of its own back into the main window.) |
 | ![](panel-section-closed.svg) | `panel-section-closed.svg` | chevron-right | properties_ui.rs |
 | ![](panel-section-open.svg) | `panel-section-open.svg` | chevron-down | properties_ui.rs |
 | ![](power-select-pick.svg) | `power-select-pick.svg` | mouse-pointer-2 | app/power_select_dialog.rs |
