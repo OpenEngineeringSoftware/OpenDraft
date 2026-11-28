@@ -81,6 +81,17 @@ impl<'a> Planner<'a> {
             return Ok(None);
         };
         let name = root.name.clone();
+        // Listed in the report whether or not it can be read.
+        let index = self.nested.len();
+        self.nested.push(opendraft_core::XrefNested {
+            name: name.clone(),
+            parent: self.self_index,
+            path: xref.path.clone(),
+            kind: xref.kind,
+            found: String::new(),
+            stamp: None,
+            loaded: false,
+        });
         if xref.kind.is_overlay() {
             return Ok(self.not_loaded(&name, "an overlay is not carried through an attachment"));
         }
@@ -104,11 +115,26 @@ impl<'a> Planner<'a> {
             Err(why) => return Ok(self.not_loaded(&name, why)),
         };
         self.loaded_nested += 1;
+        if let Some(entry) = self.nested.get_mut(index) {
+            entry.loaded = true;
+            entry.found = path.display().to_string();
+            entry.stamp = std::fs::metadata(&path)
+                .ok()
+                .map(|m| opendraft_core::XrefStamp {
+                    length: m.len(),
+                    modified: m
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map_or(0, |d| d.as_secs() as i64),
+                });
+        }
         for warning in &loaded.warnings {
             self.notes.push(format!("\"{name}\": {warning}"));
         }
 
         let mut child = self.child(
+            index,
             &loaded.document,
             format!("{}|{name}", self.name),
             format!("{}{name}|", self.prefix),
@@ -158,6 +184,7 @@ impl<'a> Planner<'a> {
     /// counters and tables so that ids, names and limits run across them.
     fn child<'b>(
         &mut self,
+        index: usize,
         source: &'b Document,
         name: String,
         prefix: String,
@@ -204,6 +231,8 @@ impl<'a> Planner<'a> {
             bindings_done: std::mem::take(&mut self.bindings_done),
             entities_total: self.entities_total,
             loaded_nested: self.loaded_nested,
+            nested: std::mem::take(&mut self.nested),
+            self_index: Some(index),
             nested_cache: HashMap::new(),
         }
     }
@@ -218,6 +247,7 @@ impl<'a> Planner<'a> {
         self.next_layer = child.next_layer;
         self.skipped = child.skipped;
         self.notes = child.notes;
+        self.nested = child.nested;
         self.steps = child.steps;
         self.cleared_associations = child.cleared_associations;
         self.dynamic_states = child.dynamic_states;

@@ -157,8 +157,8 @@ pub use validate::DocumentError;
 pub use vertex_edit::VertexGrip;
 pub use xref::{
     path_problem, TextStylePlan, XrefAttachDraft, XrefDef, XrefKind, XrefLayer, XrefLoadRequest,
-    XrefPathType, XrefPlan, XrefProblem, XrefReport, XrefStamp, MAX_XREF_NOTES, MAX_XREF_PATH,
-    MAX_XREF_SKIPPED_KINDS,
+    XrefNested, XrefPathType, XrefPlan, XrefProblem, XrefReport, XrefStamp, MAX_XREF_NESTED,
+    MAX_XREF_NOTES, MAX_XREF_PATH, MAX_XREF_SKIPPED_KINDS,
 };
 pub use xref_bind::{BindError, BindPlan, BindType, XbindSymbol};
 pub use xref_clip::{clip_problem, XrefClip, MAX_CLIP_POINTS};

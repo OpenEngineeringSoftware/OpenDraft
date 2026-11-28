@@ -60,9 +60,9 @@ The starting drawings are Lucide's (ISC licence, `LICENSE-Lucide.txt`).
 | ![](block-close.svg) | `block-close.svg` | x | Close Block Editor |
 | ![](block-create.svg) | `block-create.svg` | component | Create |
 | ![](block-eattedit.svg) | `block-eattedit.svg` | list | Multiple |
-| ![](block-edit.svg) | `block-edit.svg` | pencil | Edit |
-| ![](block-insert.svg) | `block-insert.svg` | box | Insert |
-| ![](block-library.svg) | `block-library.svg` | library | Content Manager, content_manager/list.rs |
+| ![](block-edit.svg) | `block-edit.svg` | pencil | Clip, Edit |
+| ![](block-insert.svg) | `block-insert.svg` | box | Attach, Insert |
+| ![](block-library.svg) | `block-library.svg` | library | Content Manager, External References, content_manager/list.rs |
 | ![](block-parameter.svg) | `block-parameter.svg` | ruler | Parameter |
 | ![](block-purge.svg) | `block-purge.svg` | eraser | Purge |
 | ![](block-reset.svg) | `block-reset.svg` | rotate-ccw | Reset |
@@ -259,6 +259,17 @@ The starting drawings are Lucide's (ISC licence, `LICENSE-Lucide.txt`).
 | ![](osnap-quadrant.svg) | `osnap-quadrant.svg` | grid-3x3 | app/status_toggles.rs |
 | ![](osnap-tangent.svg) | `osnap-tangent.svg` | grid-3x3 | app/status_toggles.rs |
 | ![](panel-dock.svg) | `panel-dock.svg` | dock | app/detached_drag.rs (Dock a panel that is in a window of its own back into the main window.) |
+| ![](xref-panel-attach.svg) | `xref-panel-attach.svg` | file-plus | (not used) |
+| ![](xref-panel-bind.svg) | `xref-panel-bind.svg` | link | (not used) |
+| ![](xref-panel-clip.svg) | `xref-panel-clip.svg` | scissors | (not used) |
+| ![](xref-panel-detach.svg) | `xref-panel-detach.svg` | trash-2 | (not used) |
+| ![](xref-panel-file.svg) | `xref-panel-file.svg` | file | (not used) |
+| ![](xref-panel-file-missing.svg) | `xref-panel-file-missing.svg` | file-warning | (not used) |
+| ![](xref-panel-list.svg) | `xref-panel-list.svg` | list | (not used) |
+| ![](xref-panel-path.svg) | `xref-panel-path.svg` | pencil | (not used) |
+| ![](xref-panel-reload.svg) | `xref-panel-reload.svg` | refresh-cw | (not used) |
+| ![](xref-panel-tree.svg) | `xref-panel-tree.svg` | list-tree | (not used) |
+| ![](xref-panel-unload.svg) | `xref-panel-unload.svg` | unlink | (not used) |
 | ![](panel-window-close.svg) | `panel-window-close.svg` | x | app/detached_drag.rs (Close the window of a panel that is in a window of its own.) |
 | ![](panel-section-closed.svg) | `panel-section-closed.svg` | chevron-right | properties_ui.rs |
 | ![](panel-section-open.svg) | `panel-section-open.svg` | chevron-down | properties_ui.rs |
