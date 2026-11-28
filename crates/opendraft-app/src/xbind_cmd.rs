@@ -15,7 +15,7 @@ struct Choice {
 
 /// `-XREF Bind`: make whole references ordinary blocks.
 pub(crate) fn bind_all(ed: &mut Editor) -> Result<(), Cancelled> {
-    let blocks = crate::xref_cmd::chosen(ed, key!("Enter xref name(s) to bind:"))?;
+    let blocks = crate::xref_cmd::chosen(ed, key!("Enter xref name(s) to bind"))?;
     if blocks.is_empty() {
         ed.say(key!("No such external reference."));
         return Ok(());
@@ -54,10 +54,10 @@ pub(crate) fn xbind(ed: &mut Editor) -> Result<(), Cancelled> {
             ));
             return Ok(());
         }
-        'a' => key!("Enter dependent layer name(s):"),
-        'l' => key!("Enter dependent linetype name(s):"),
-        't' => key!("Enter dependent text style name(s):"),
-        _ => key!("Enter dependent block name(s):"),
+        'a' => key!("Enter dependent layer name(s)"),
+        'l' => key!("Enter dependent linetype name(s)"),
+        't' => key!("Enter dependent text style name(s)"),
+        _ => key!("Enter dependent block name(s)"),
     };
     let choices = ed.read(move |doc| choices(doc, kind))?;
     if choices.is_empty() {

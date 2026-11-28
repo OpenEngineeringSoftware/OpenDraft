@@ -147,9 +147,8 @@ fn host_dir(ed: &Editor) -> Option<String> {
 pub(crate) fn attach_dialog(ed: &mut Editor) -> Result<(), Cancelled> {
     let dir = host_dir(ed);
     let defaults = defaults_of(ed);
-    let source_path = ed.get_string(Options::<String>::new(key!(
-        "Enter name of file to attach:"
-    )))?;
+    let source_path =
+        ed.get_string(Options::<String>::new(key!("Enter name of file to attach")))?;
     if let Some(problem) = source_problem(&source_path, dir.as_deref()) {
         ed.say(problem);
         return Ok(());
@@ -170,13 +169,13 @@ pub(crate) fn attach_dialog(ed: &mut Editor) -> Result<(), Cancelled> {
     let draft = ed.ask_xref_attach(draft)?;
     let at = match draft.insertion {
         Some(at) => at,
-        None => ed.get_point(PointOptions::new(key!("Specify insertion point:")))?,
+        None => ed.get_point(PointOptions::new(key!("Specify insertion point")))?,
     };
     let scale = match draft.scale {
         Some(scale) => scale,
         None => {
             let factor =
-                ed.get_number(NumberOptions::new(key!("Specify scale factor <1>:")).default(1.0))?;
+                ed.get_number(NumberOptions::new(key!("Specify scale factor")).default(1.0))?;
             (factor, factor)
         }
     };
@@ -186,9 +185,7 @@ pub(crate) fn attach_dialog(ed: &mut Editor) -> Result<(), Cancelled> {
     }
     let rotation = match draft.rotation {
         Some(angle) => angle,
-        None => {
-            ed.get_angle(NumberOptions::new(key!("Specify rotation angle <0>:")).default(0.0))?
-        }
+        None => ed.get_angle(NumberOptions::new(key!("Specify rotation angle")).default(0.0))?,
     };
     let request = XrefLoadRequest {
         block: None,
@@ -208,9 +205,8 @@ pub(crate) fn attach_dialog(ed: &mut Editor) -> Result<(), Cancelled> {
 pub(crate) fn attach(ed: &mut Editor, kind: XrefKind) -> Result<(), Cancelled> {
     let dir = host_dir(ed);
     let path_type = defaults_of(ed).path_type;
-    let source_path = ed.get_string(Options::<String>::new(key!(
-        "Enter name of file to attach:"
-    )))?;
+    let source_path =
+        ed.get_string(Options::<String>::new(key!("Enter name of file to attach")))?;
     if let Some(problem) = source_problem(&source_path, dir.as_deref()) {
         ed.say(problem);
         return Ok(());
@@ -230,15 +226,13 @@ pub(crate) fn attach(ed: &mut Editor, kind: XrefKind) -> Result<(), Cancelled> {
         ed.say(problem);
         return Ok(());
     }
-    let at = ed.get_point(PointOptions::new(key!("Specify insertion point:")))?;
-    let scale =
-        ed.get_number(NumberOptions::new(key!("Specify scale factor <1>:")).default(1.0))?;
+    let at = ed.get_point(PointOptions::new(key!("Specify insertion point")))?;
+    let scale = ed.get_number(NumberOptions::new(key!("Specify scale factor")).default(1.0))?;
     if !scale.is_finite() || scale == 0.0 {
         ed.say(key!("The scale factor cannot be zero."));
         return Ok(());
     }
-    let rotation =
-        ed.get_angle(NumberOptions::new(key!("Specify rotation angle <0>:")).default(0.0))?;
+    let rotation = ed.get_angle(NumberOptions::new(key!("Specify rotation angle")).default(0.0))?;
     let request = XrefLoadRequest {
         block: None,
         name,
@@ -285,7 +279,7 @@ fn plan_and_attach(
 }
 
 fn reload(ed: &mut Editor) -> Result<(), Cancelled> {
-    let blocks = chosen(ed, key!("Enter xref name(s) to reload:"))?;
+    let blocks = chosen(ed, key!("Enter xref name(s) to reload"))?;
     if blocks.is_empty() {
         ed.say(key!("No such external reference."));
         return Ok(());
@@ -349,7 +343,7 @@ pub(crate) fn reload_all(ed: &mut Editor) -> Result<(), Cancelled> {
 }
 
 fn unload(ed: &mut Editor) -> Result<(), Cancelled> {
-    let blocks = chosen(ed, key!("Enter xref name(s) to unload:"))?;
+    let blocks = chosen(ed, key!("Enter xref name(s) to unload"))?;
     if blocks.is_empty() {
         ed.say(key!("No such external reference."));
         return Ok(());
@@ -367,7 +361,7 @@ pub(crate) fn unload_block(ed: &mut Editor, block: BlockId) -> Result<(), Cancel
 }
 
 fn detach(ed: &mut Editor) -> Result<(), Cancelled> {
-    let blocks = chosen(ed, key!("Enter xref name(s) to detach:"))?;
+    let blocks = chosen(ed, key!("Enter xref name(s) to detach"))?;
     if blocks.is_empty() {
         ed.say(key!("No such external reference."));
         return Ok(());
@@ -393,7 +387,7 @@ pub(crate) fn edit_path_block(ed: &mut Editor, block: BlockId) -> Result<(), Can
 }
 
 fn edit_path(ed: &mut Editor) -> Result<(), Cancelled> {
-    let blocks = chosen(ed, key!("Enter xref name(s) to edit:"))?;
+    let blocks = chosen(ed, key!("Enter xref name(s) to edit"))?;
     if blocks.is_empty() {
         ed.say(key!("No such external reference."));
         return Ok(());
@@ -411,7 +405,7 @@ fn edit_path(ed: &mut Editor) -> Result<(), Cancelled> {
 /// The new path and its form, or `None` when the path cannot be used (the
 /// user is told why).
 fn ask_path(ed: &mut Editor) -> Result<Option<(String, XrefPathType)>, Cancelled> {
-    let path = ed.get_string(Options::<String>::new(key!("Enter new path:")))?;
+    let path = ed.get_string(Options::<String>::new(key!("Enter new path")))?;
     if let Some(problem) = path_problem(&path) {
         ed.say(problem.to_string());
         return Ok(None);

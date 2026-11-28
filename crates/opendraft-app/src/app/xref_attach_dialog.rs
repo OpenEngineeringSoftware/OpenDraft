@@ -45,41 +45,33 @@ impl OpenDraftApp {
             |ui| {
                 name_and_path(ui, theme, &mut draft, picker.as_mut(), dir.as_deref());
                 ui.add_space(8.0);
-                ui.horizontal_top(|ui| {
-                    ui.vertical(|ui| {
-                        widgets::group_box(ui, theme, "Reference Type", |ui| {
-                            ui.radio_value(&mut draft.kind, XrefKind::Attach, "Attachment");
-                            ui.radio_value(&mut draft.kind, XrefKind::Overlay, "Overlay");
-                        });
+                // Columns give each group its share of the width; boxes laid
+                // side by side in `horizontal_top` collapsed to a letter wide.
+                ui.columns(2, |columns| {
+                    widgets::group_box(&mut columns[0], theme, "Reference Type", |ui| {
+                        ui.radio_value(&mut draft.kind, XrefKind::Attach, "Attachment");
+                        ui.radio_value(&mut draft.kind, XrefKind::Overlay, "Overlay");
                     });
-                    ui.vertical(|ui| {
-                        widgets::group_box(ui, theme, "Path Type", |ui| {
-                            ui.radio_value(&mut draft.path_type, XrefPathType::Full, "Full path");
-                            ui.radio_value(
-                                &mut draft.path_type,
-                                XrefPathType::Relative,
-                                "Relative path",
-                            );
-                            ui.radio_value(&mut draft.path_type, XrefPathType::NoPath, "No path");
-                        });
+                    widgets::group_box(&mut columns[1], theme, "Path Type", |ui| {
+                        ui.radio_value(&mut draft.path_type, XrefPathType::Full, "Full path");
+                        ui.radio_value(
+                            &mut draft.path_type,
+                            XrefPathType::Relative,
+                            "Relative path",
+                        );
+                        ui.radio_value(&mut draft.path_type, XrefPathType::NoPath, "No path");
                     });
                 });
                 ui.add_space(8.0);
-                ui.horizontal_top(|ui| {
-                    ui.vertical(|ui| {
-                        widgets::group_box(ui, theme, "Insertion Point", |ui| {
-                            insertion(ui, theme, &mut draft.insertion);
-                        });
+                ui.columns(3, |columns| {
+                    widgets::group_box(&mut columns[0], theme, "Insertion Point", |ui| {
+                        insertion(ui, theme, &mut draft.insertion);
                     });
-                    ui.vertical(|ui| {
-                        widgets::group_box(ui, theme, "Scale", |ui| {
-                            scale(ui, theme, &mut draft.scale);
-                        });
+                    widgets::group_box(&mut columns[1], theme, "Scale", |ui| {
+                        scale(ui, theme, &mut draft.scale);
                     });
-                    ui.vertical(|ui| {
-                        widgets::group_box(ui, theme, "Rotation", |ui| {
-                            rotation(ui, theme, &mut draft.rotation);
-                        });
+                    widgets::group_box(&mut columns[2], theme, "Rotation", |ui| {
+                        rotation(ui, theme, &mut draft.rotation);
                     });
                 });
                 ui.add_space(6.0);
