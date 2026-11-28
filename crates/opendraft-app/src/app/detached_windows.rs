@@ -228,13 +228,20 @@ pub(super) fn run(
         // The pointer is in pixels of the whole screen, whatever monitor the
         // window it came from is on; so is the main window's inside here.
         let main = ctx.input(|i| i.viewport().inner_rect).map(|r| r * ppp);
+        let near_id = detached_drag::near_key(panel);
+        let mut near = false;
         if let Some(main) = main.filter(|r| r.contains(moved.pointer)) {
             let at = ((moved.pointer - main.min) / ppp).to_pos2();
+            // Wider to leave than to enter, so the window does not flicker.
+            let was = ctx.data(|d| d.get_temp::<bool>(near_id)) == Some(true);
+            let margin = if was { 110.0 } else { 70.0 };
+            near = dock::near_dock_target(dock, panel, at, margin);
             let theme = viewer.theme;
             if dock::offer_detached(ctx, theme, dock, panel, at, moved.released) {
                 detached.remove(panel);
             }
         }
+        ctx.data_mut(|d| d.insert_temp(near_id, near));
     }
     if !asked.keys.is_empty() {
         detached.forward(asked.keys);

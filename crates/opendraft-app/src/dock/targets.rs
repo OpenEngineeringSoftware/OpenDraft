@@ -180,6 +180,18 @@ pub fn drop_at(dock: &DockState<PanelTab>, targets: &[Target], at: Pos2) -> Drop
     }
 }
 
+/// Whether `at` is within `margin` of a target button or a tab bar a panel
+/// could be dropped on: where a carried window must get out of the way.
+pub fn near_drop(dock: &DockState<PanelTab>, targets: &[Target], at: Pos2, margin: f32) -> bool {
+    targets.iter().any(|t| t.button.expand(margin).contains(at))
+        || dock.iter_all_nodes().any(|(_, node)| match node {
+            Node::Leaf { rect, tabs, .. } => {
+                visible_bar(dock, *rect, tabs).is_some_and(|bar| bar.expand(margin).contains(at))
+            }
+            _ => false,
+        })
+}
+
 /// Make the dock match `drop` once egui_dock has handled the release:
 /// it floats a panel dropped on a panel's body, and puts one dropped on a
 /// tab bar among its tabs, hidden bars included.
@@ -383,6 +395,23 @@ mod tests {
         assert_eq!(drop_at(&dock, &found, egui::pos2(400.0, 10.0)), Drop::Float);
         let on = found[2].button.center();
         assert_eq!(drop_at(&dock, &found, on), Drop::Dock(found[2]));
+    }
+
+    #[test]
+    fn a_carried_window_is_near_only_close_to_somewhere_it_could_dock() {
+        let dock = laid_out();
+        let centre = drawing().center();
+        let found = targets(&dock, PanelTab::Layers, Vec2::splat(200.0), centre);
+        assert!(!near_drop(&dock, &found, centre, 70.0));
+        let button = found[0].button.center();
+        assert!(near_drop(
+            &dock,
+            &found,
+            button + egui::vec2(50.0, 0.0),
+            70.0
+        ));
+        // Over a visible tab bar.
+        assert!(near_drop(&dock, &found, egui::pos2(60.0, 10.0), 70.0));
     }
 
     #[test]

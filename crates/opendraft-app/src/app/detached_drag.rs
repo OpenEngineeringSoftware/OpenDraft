@@ -29,6 +29,12 @@ struct Carry {
     shrunk: bool,
 }
 
+/// Where the app records, each frame of a carry, whether the pointer is near
+/// a place the window could dock (a `bool`).
+pub(super) fn near_key(panel: PanelTab) -> egui::Id {
+    egui::Id::new(("panel_carry_near", panel))
+}
+
 /// A handle was dragged this frame.
 pub(super) struct Moved {
     /// The pointer on the screen, in pixels of the whole screen (not points of
@@ -146,7 +152,10 @@ fn carry(ctx: &egui::Context, drag: &egui::Response, panel: PanelTab) -> Option<
             grab,
             shrunk: false,
         };
-        ctx.data_mut(|d| d.insert_temp(key, carry));
+        ctx.data_mut(|d| {
+            d.insert_temp(key, carry);
+            d.remove::<bool>(near_key(panel));
+        });
     }
     if drag.dragged() {
         let pointer = pointer?;
@@ -155,10 +164,13 @@ fn carry(ctx: &egui::Context, drag: &egui::Response, panel: PanelTab) -> Option<
         let main = ctx.input_for(egui::ViewportId::ROOT, |i| {
             i.viewport().inner_rect.map(|r| r * i.pixels_per_point())
         });
-        let over_main = main.is_some_and(|m| m.contains(pointer));
-        if over_main != carry.shrunk {
-            carry.shrunk = over_main;
-            let (least, size) = match over_main {
+        // Shrunk only near somewhere it could dock, so the window keeps its
+        // size (and can be placed exactly) over the rest of the drawing.
+        let near = ctx.data(|d| d.get_temp::<bool>(near_key(panel))) == Some(true);
+        let shrink = near && main.is_some_and(|m| m.contains(pointer));
+        if shrink != carry.shrunk {
+            carry.shrunk = shrink;
+            let (least, size) = match shrink {
                 true => (CARRIED, CARRIED),
                 false => (Vec2::from(LEAST), carry.size),
             };
