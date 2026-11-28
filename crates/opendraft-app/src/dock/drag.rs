@@ -107,6 +107,19 @@ pub fn offer_detached(
     }
 }
 
+/// Whether a detached window carried to `at` (in the main window's points)
+/// is within `margin` of somewhere it could dock.
+pub fn near_dock_target(
+    dock: &DockState<PanelTab>,
+    panel: PanelTab,
+    at: Pos2,
+    margin: f32,
+) -> bool {
+    let size = Vec2::from(crate::detached::OPENS_AT_LEAST);
+    let found = targets::targets(dock, panel, size, at);
+    targets::near_drop(dock, &found, at, margin)
+}
+
 /// A floating panel's window is framed like a docked panel: square, with
 /// its one-point border right round the tab bar and contents, not the
 /// padding and rounded corners of a dialog. egui_dock frames its windows

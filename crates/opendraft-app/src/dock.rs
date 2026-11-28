@@ -15,7 +15,7 @@ mod sizes;
 mod targets;
 mod windows;
 
-pub use drag::{offer_detached, show_area};
+pub use drag::{near_dock_target, offer_detached, show_area};
 pub use places::Places;
 pub use sizes::{keep_minimum_sizes, split_shares};
 pub use windows::{dock_back, floating};
