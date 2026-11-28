@@ -115,6 +115,8 @@ pub fn plan_xref(
         bindings_done: Vec::new(),
         entities_total: 0,
         loaded_nested: 0,
+        nested: Vec::new(),
+        self_index: None,
         nested_cache: HashMap::new(),
     };
     planner.map_linetypes()?;
@@ -233,6 +235,11 @@ struct Planner<'a> {
     bindings_done: Vec<XrefLayer>,
     entities_total: u64,
     loaded_nested: u64,
+    /// The references inside the sources so far, for the report: parents
+    /// before their children.
+    nested: Vec<opendraft_core::XrefNested>,
+    /// This source's place in `nested` (`None` for the top source).
+    self_index: Option<usize>,
     /// The block each of this source's reference inserts stands for, by the
     /// source's block id (`None` when the reference was not loaded).
     nested_cache: HashMap<BlockId, Option<Arc<BlockDef>>>,
@@ -296,6 +303,7 @@ impl Planner<'_> {
             local_blocks: self.locals().len() as u64,
             skipped: self.skipped.clone(),
             notes: Vec::new(),
+            nested: self.nested.clone(),
         };
         if self.cleared_associations {
             report.notes.push(

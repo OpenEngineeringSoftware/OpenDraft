@@ -25,6 +25,10 @@ pub const MAX_XREF_PATH: usize = 32_767;
 /// palette without bound.
 pub const MAX_XREF_NOTES: usize = 64;
 
+/// Most nested references kept in one report (the loader reads at most this
+/// many per load).
+pub const MAX_XREF_NESTED: usize = 256;
+
 /// Most distinct skipped kinds kept in one report.
 pub const MAX_XREF_SKIPPED_KINDS: usize = 256;
 
@@ -85,6 +89,27 @@ pub struct XrefStamp {
     pub modified: i64,
 }
 
+/// A reference the source drawing attaches, found while loading the top
+/// reference. Its content is part of the top reference's snapshot, so it is
+/// not a record of its own; this keeps what the palette shows about it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct XrefNested {
+    pub name: String,
+    /// Index in [`XrefReport::nested`] of the reference that attaches this
+    /// one, or `None` when the top reference's own source does. Always lower
+    /// than this one's own index.
+    pub parent: Option<usize>,
+    /// The path as the attaching drawing saved it.
+    pub path: String,
+    pub kind: XrefKind,
+    /// The file that was read, as of the load; empty when none was.
+    pub found: String,
+    /// That file's size and date when it was read.
+    pub stamp: Option<XrefStamp>,
+    /// Whether it was read (a reference that could not be is still listed).
+    pub loaded: bool,
+}
+
 /// What the last load did. Informational; never used to decide validity.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct XrefReport {
@@ -92,6 +117,8 @@ pub struct XrefReport {
     pub local_blocks: u64,
     pub skipped: BTreeMap<String, u64>,
     pub notes: Vec<String>,
+    /// The references inside the source, parents before their children.
+    pub nested: Vec<XrefNested>,
 }
 
 impl XrefReport {
@@ -108,6 +135,8 @@ impl XrefReport {
         if self.notes.len() > MAX_XREF_NOTES {
             self.notes.truncate(MAX_XREF_NOTES);
         }
+        // Parents come first, so the kept ones still point at kept ones.
+        self.nested.truncate(MAX_XREF_NESTED);
         self
     }
 

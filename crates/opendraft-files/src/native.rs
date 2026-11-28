@@ -1791,6 +1791,29 @@ mod tests {
                 local_blocks: 1,
                 skipped: BTreeMap::from([("MTEXT".to_owned(), 2)]),
                 notes: vec!["laid out in metres".to_owned()],
+                nested: vec![
+                    opendraft_core::XrefNested {
+                        name: "floors".to_owned(),
+                        parent: None,
+                        path: "./floors.dwg".to_owned(),
+                        kind: opendraft_core::XrefKind::Attach,
+                        found: "C:/work/floors.dwg".to_owned(),
+                        stamp: Some(XrefStamp {
+                            length: 10,
+                            modified: 20,
+                        }),
+                        loaded: true,
+                    },
+                    opendraft_core::XrefNested {
+                        name: "walls".to_owned(),
+                        parent: Some(0),
+                        path: "walls.dwg".to_owned(),
+                        kind: opendraft_core::XrefKind::Attach,
+                        found: String::new(),
+                        stamp: None,
+                        loaded: false,
+                    },
+                ],
             },
         }]);
         doc.set_insert_base(Point::new(1.5, -2.0));
@@ -1824,6 +1847,23 @@ mod tests {
         assert!(clip.enabled);
         assert_eq!(clip.boundary[2], Point::new(4.0, 2.0));
         assert_eq!(read.xclip_frame(), 0);
+        let nested = &read.xrefs()[0].report.nested;
+        assert_eq!(nested.len(), 2);
+        assert_eq!(nested[1].parent, Some(0));
+        assert!(!nested[1].loaded);
+    }
+
+    #[test]
+    fn a_nested_reference_naming_a_later_parent_is_read_as_a_top_one() {
+        let document = xref_drawing();
+        let bytes = NativeFormat.write(&document).unwrap().bytes;
+        let mut value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        value["drawing"]["xrefs"][0]["report"]["nested"][0]["parent"] = serde_json::json!(1);
+        let read = NativeFormat
+            .read(&serde_json::to_vec(&value).unwrap())
+            .unwrap()
+            .document;
+        assert_eq!(read.xrefs()[0].report.nested[0].parent, None);
     }
 
     #[test]

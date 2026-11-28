@@ -178,6 +178,12 @@ fn an_attached_reference_is_read_and_carried_as_a_local_block() {
         "Loaded nested external reference \"walls\""
     ));
 
+    let nested = &plan.xref.report.nested;
+    assert_eq!(nested.len(), 1);
+    assert_eq!((nested[0].name.as_str(), nested[0].parent), ("walls", None));
+    assert!(nested[0].loaded && nested[0].found.ends_with("walls.odraft"));
+    assert!(nested[0].stamp.is_some_and(|s| s.length > 0));
+
     let doc = applied(Document::default(), &plan);
     assert_eq!(doc.xrefs().len(), 1, "one record: the nesting is inside it");
     let _ = std::fs::remove_dir_all(dir);
@@ -226,6 +232,9 @@ fn an_overlay_is_not_carried_through_an_attachment() {
     let plan = plan_of(&Document::default(), &source, &file);
     assert!(plan.xref.blocks.is_empty());
     assert!(has_note(&plan, "an overlay is not carried"));
+    // Still listed, as one that was not read.
+    assert_eq!(plan.xref.report.nested.len(), 1);
+    assert!(!plan.xref.report.nested[0].loaded);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -240,6 +249,8 @@ fn a_reference_whose_file_is_missing_is_noted_and_left_out() {
     assert!(plan.xref.blocks.is_empty());
     assert_eq!(plan.root.entities.len(), 1);
     assert!(has_note(&plan, "was not loaded"));
+    assert!(!plan.xref.report.nested[0].loaded);
+    assert!(plan.xref.report.nested[0].found.is_empty());
     // Its layer copy in the source is not made a layer of the host either.
     assert!(plan
         .added_layers

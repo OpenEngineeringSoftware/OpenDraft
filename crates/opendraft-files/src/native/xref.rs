@@ -9,7 +9,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use opendraft_core::{
-    BlockDef, Document, XrefDef, XrefKind, XrefLayer, XrefPathType, XrefReport, XrefStamp,
+    BlockDef, Document, XrefDef, XrefKind, XrefLayer, XrefNested, XrefPathType, XrefReport,
+    XrefStamp,
 };
 use serde::{Deserialize, Serialize};
 
@@ -109,6 +110,65 @@ struct ReportDto {
         deserialize_with = "limits::table_rows"
     )]
     notes: Vec<String>,
+    /// The references inside the source, parents before their children.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "limits::table_rows"
+    )]
+    nested: Vec<NestedDto>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct NestedDto {
+    name: String,
+    /// Index of the reference that attaches this one; absent for the top
+    /// reference's own source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    parent: Option<usize>,
+    #[serde(default)]
+    path: String,
+    kind: KindDto,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    found: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stamp: Option<StampDto>,
+    #[serde(default)]
+    loaded: bool,
+}
+
+impl NestedDto {
+    fn of(n: &XrefNested) -> Self {
+        Self {
+            name: n.name.clone(),
+            parent: n.parent,
+            path: n.path.clone(),
+            kind: KindDto::of(n.kind),
+            found: n.found.clone(),
+            stamp: n.stamp.map(|s| StampDto {
+                length: s.length,
+                modified: s.modified,
+            }),
+            loaded: n.loaded,
+        }
+    }
+
+    /// The reference at `index`; a parent that does not come before it is
+    /// dropped, so the list is always a forest.
+    fn into_core(self, index: usize) -> XrefNested {
+        XrefNested {
+            name: self.name,
+            parent: self.parent.filter(|p| *p < index),
+            path: self.path,
+            kind: self.kind.into_core(),
+            found: self.found,
+            stamp: self.stamp.map(|s| XrefStamp {
+                length: s.length,
+                modified: s.modified,
+            }),
+            loaded: self.loaded,
+        }
+    }
 }
 
 impl ReportDto {
@@ -117,6 +177,7 @@ impl ReportDto {
             && self.local_blocks == 0
             && self.skipped.is_empty()
             && self.notes.is_empty()
+            && self.nested.is_empty()
     }
 }
 
@@ -195,6 +256,7 @@ impl XrefDto {
                 local_blocks: xref.report.local_blocks,
                 skipped: xref.report.skipped.clone(),
                 notes: xref.report.notes.clone(),
+                nested: xref.report.nested.iter().map(NestedDto::of).collect(),
             },
         })
     }
@@ -243,6 +305,13 @@ impl XrefDto {
                 local_blocks: self.report.local_blocks,
                 skipped: self.report.skipped,
                 notes: self.report.notes,
+                nested: self
+                    .report
+                    .nested
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, n)| n.into_core(i))
+                    .collect(),
             },
         })
     }

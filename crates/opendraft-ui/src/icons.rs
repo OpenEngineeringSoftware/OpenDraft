@@ -286,6 +286,17 @@ icons! {
     OSNAP_TANGENT = '\u{e0ec}';
     /// Dock a panel that is in a window of its own back into the main window.
     PANEL_DOCK = '\u{e5d7}';
+    XREF_PANEL_ATTACH = '\u{e0cd}';
+    XREF_PANEL_BIND = '\u{e107}';
+    XREF_PANEL_CLIP = '\u{e151}';
+    XREF_PANEL_DETACH = '\u{e18d}';
+    XREF_PANEL_FILE = '\u{e0c4}';
+    XREF_PANEL_FILE_MISSING = '\u{e32f}';
+    XREF_PANEL_LIST = '\u{e10b}';
+    XREF_PANEL_PATH = '\u{e1f8}';
+    XREF_PANEL_RELOAD = '\u{e148}';
+    XREF_PANEL_TREE = '\u{e40c}';
+    XREF_PANEL_UNLOAD = '\u{e19b}';
     /// Close the window of a panel that is in a window of its own.
     PANEL_WINDOW_CLOSE = '\u{e1b1}';
     PANEL_SECTION_CLOSED = '\u{e073}';
