@@ -247,6 +247,8 @@ fn a_strip_closed_and_shown_again_is_a_strip_in_the_same_place() {
 #[test]
 fn a_command_line_undocked_by_its_grip_is_remembered_as_floating() {
     let (mut app, ctx, panel, mut time) = strip_app();
+    // Floating inside the main window is the setting's other state.
+    app.state.settings.popout_windows = false;
     let handle = Pos2::new(panel.left() + 9.0, panel.top() + 40.0);
     drag(
         &mut app,

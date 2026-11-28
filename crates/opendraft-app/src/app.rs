@@ -11,9 +11,13 @@ mod block_dialog;
 mod chrome;
 mod command_line;
 mod command_line_strip;
+mod command_source;
 mod consent_dialog;
 mod context_menu;
 mod ctrl_watch;
+mod detached_drag;
+mod detached_frame;
+mod detached_windows;
 mod dim_manager;
 mod dim_preview;
 mod dim_style_dialog;
@@ -51,9 +55,10 @@ mod xref_attach_dialog;
 use eframe::egui;
 use egui_dock::DockState;
 use opendraft_commands::Registry;
-use opendraft_ui::ribbon::{CommandSource, Ribbon, RibbonState};
+use opendraft_ui::icons;
+use opendraft_ui::ribbon::{Ribbon, RibbonState};
 use opendraft_ui::shortcuts::{consume_shortcut, modifier_count, parse_shortcut};
-use opendraft_ui::{icons, Theme};
+use opendraft_ui::Theme;
 
 use crate::dock::{self, PanelTab};
 use crate::locations::Location;
@@ -101,6 +106,8 @@ pub struct OpenDraftApp {
     dock: DockState<PanelTab>,
     /// Where each panel was last docked, for showing a hidden one again.
     places: dock::Places,
+    /// Panels in windows of their own, and where those windows opened.
+    detached: crate::detached::Detached,
     /// The window title last sent, so it is only set when it changes.
     window_title: String,
     /// When recovery copies were last written.
@@ -131,7 +138,7 @@ impl OpenDraftApp {
         theme: Theme,
         settings: Settings,
         defaults: std::sync::Arc<crate::defaults::CommandDefaults>,
-        (dock, places): (DockState<PanelTab>, dock::Places),
+        (dock, places, detached): (DockState<PanelTab>, dock::Places, crate::detached::Detached),
         recent: RecentFiles,
         updates: crate::updates::Updates,
         open: Vec<std::path::PathBuf>,
@@ -182,6 +189,7 @@ impl OpenDraftApp {
             ribbon_state: RibbonState::default(),
             dock,
             places,
+            detached,
             window_title: String::new(),
             last_autosave: std::time::Instant::now(),
             io_waker_set: false,
@@ -219,6 +227,9 @@ impl OpenDraftApp {
     /// line, as in AutoCAD. So does a bare Enter: it answers the current
     /// prompt (finishes Copy, accepts a default) or repeats the last command.
     fn route_typing_to_command_line(&mut self, ctx: &egui::Context) {
+        // Keys pressed in a window of a detached panel that it did not use.
+        let forwarded = self.detached.take_forwarded();
+        ctx.input_mut(|i| i.events.extend(forwarded));
         // First, because dynamic input handles the frame and returns early.
         self.watch_keys(ctx);
         if self.route_dynamic_input(ctx) || self.browse_command_history(ctx) {
@@ -231,8 +242,8 @@ impl OpenDraftApp {
         {
             return;
         }
-        let command_line_active = dock::is_open(&self.dock, PanelTab::CommandLine)
-            && !self.state.cmdline.input.is_empty();
+        let command_line_active =
+            self.panel_open(PanelTab::CommandLine) && !self.state.cmdline.input.is_empty();
         // egui drops focus from the command line on Escape, so the shortcuts
         // would take it as a cancel; typed text is cleared first instead.
         if command_line_active
@@ -269,7 +280,7 @@ impl OpenDraftApp {
                 self.run(id);
             }
         }
-        if !dock::is_open(&self.dock, PanelTab::CommandLine) {
+        if !self.panel_open(PanelTab::CommandLine) {
             return;
         }
         let typed = ctx.input(|i| {
@@ -365,39 +376,13 @@ impl OpenDraftApp {
     }
 }
 
-/// Lets the ribbon ask the registry about enabled state and shortcuts.
-struct Source<'a> {
-    registry: &'a Registry<AppState>,
-    state: &'a AppState,
-    dock: &'a DockState<PanelTab>,
-}
-
-impl CommandSource for Source<'_> {
-    fn is_enabled(&self, command: &str) -> bool {
-        self.registry.is_enabled(command, self.state)
-    }
-
-    fn shortcut_text(&self, command: &str) -> Option<&str> {
-        self.registry.get(command)?.shortcut
-    }
-
-    fn is_active(&self, command: &str) -> bool {
-        match dock::panel_of(command) {
-            Some(panel) => dock::is_open(self.dock, panel),
-            None => self.registry.is_checked(command, self.state),
-        }
-    }
-}
-
 impl eframe::App for OpenDraftApp {
     fn raw_input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
         self.capture_dynamic_keys(ctx, input);
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Some(request) = self.state.layout_request.take() {
-            dock::apply(&mut self.dock, &mut self.places, request);
-        }
+        self.apply_layout_request(ctx);
         if !self.io_waker_set {
             // A finished file job wakes the window to collect it.
             let ctx = ctx.clone();
@@ -433,7 +418,8 @@ impl eframe::App for OpenDraftApp {
         if self.state.io_busy() {
             ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
-        // A busy command needs another frame soon; one waiting does not.
+        // A command between prompts is busy for a moment: look again soon.
+        // One waiting for the user needs no frames until the user acts.
         if self.state.command_working() {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
@@ -444,6 +430,7 @@ impl eframe::App for OpenDraftApp {
         self.updates.save(storage);
         self.state.defaults().save(storage);
         dock::save(&self.dock, &self.places, storage);
+        self.detached.save(storage);
         self.state.recent.save(storage);
         crate::window_memory::save(storage);
     }

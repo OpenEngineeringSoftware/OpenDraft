@@ -361,6 +361,11 @@ fn view() -> Tab {
                         "Reset Layout",
                         icons::VIEW_RESET_LAYOUT,
                     )),
+                    Column::Large(Item::new(
+                        "view.bring_windows_back",
+                        "Bring Windows Back",
+                        icons::VIEW_BRING_WINDOWS_BACK,
+                    )),
                 ],
                 ..Default::default()
             },

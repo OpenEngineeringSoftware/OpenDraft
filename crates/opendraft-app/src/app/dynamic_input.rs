@@ -143,6 +143,11 @@ impl AppState {
 impl OpenDraftApp {
     /// Remove navigation keys before egui derives its spatial focus movement.
     pub(super) fn capture_dynamic_keys(&mut self, ctx: &egui::Context, raw: &mut egui::RawInput) {
+        // Keys of a window of its own (a dialog or a detached panel) belong to
+        // that window, not to the drawing's dynamic input.
+        if raw.viewport_id != egui::ViewportId::ROOT {
+            return;
+        }
         // With no command running, Up and Down browse the typed lines; egui
         // would move focus between the controls instead.
         if self.state.dynamic_ask().is_none()

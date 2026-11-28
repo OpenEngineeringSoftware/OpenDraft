@@ -758,6 +758,10 @@ mod tests {
         );
         registry.execute("view.reset_layout", &mut state).unwrap();
         assert_eq!(state.layout_request, Some(LayoutRequest::Reset));
+        registry
+            .execute("view.bring_windows_back", &mut state)
+            .unwrap();
+        assert_eq!(state.layout_request, Some(LayoutRequest::BringBack));
     }
 
     #[test]

@@ -74,7 +74,7 @@ fn common(a: NodeIndex, b: NodeIndex) -> NodeIndex {
 
 /// Where the floating window of `surface` is, and the size of its inside.
 /// The dock leaves that to egui, which keeps it under the window's id.
-fn window_rect(ctx: &egui::Context, surface: SurfaceIndex) -> Option<egui::Rect> {
+pub(super) fn window_rect(ctx: &egui::Context, surface: SurfaceIndex) -> Option<egui::Rect> {
     let id = egui::Id::from(format!("window {surface:?}"));
     let outside = ctx.memory(|m| m.area_rect(id))?;
     let mut style = (*ctx.style()).clone();

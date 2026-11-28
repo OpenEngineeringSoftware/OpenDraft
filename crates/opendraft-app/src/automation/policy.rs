@@ -257,6 +257,7 @@ pub const TABLE: &[(&str, AutomationPolicy, CommandEffect)] = &[
     ("view.command_line", Denied, Ui),
     ("view.assistant", Denied, Ui),
     ("view.reset_layout", Denied, Ui),
+    ("view.bring_windows_back", Denied, Ui),
 ];
 
 /// `command` with its row applied; one with no row stays `Denied`.

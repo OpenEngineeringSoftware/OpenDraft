@@ -8,8 +8,9 @@ use opendraft_ui::widgets;
 use opendraft_ui::{document_tabs, DocumentTabEvent};
 use rust_i18n::t;
 
+use super::command_source::Source;
 use super::update_notice::update_notice;
-use super::{OpenDraftApp, Source, QUICK_ACCESS};
+use super::{OpenDraftApp, QUICK_ACCESS};
 
 const READOUT_WIDTH: f32 = 165.0;
 
@@ -177,6 +178,7 @@ impl OpenDraftApp {
                     registry: &self.registry,
                     state: &self.state,
                     dock: &self.dock,
+                    detached: &self.detached,
                 };
                 let out = self
                     .ribbon

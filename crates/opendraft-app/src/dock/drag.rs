@@ -72,6 +72,41 @@ pub fn show_area(
     }
 }
 
+/// A detached panel's window dragged by its handle over the main window,
+/// the pointer `at` in the main window's coordinates: the targets and the
+/// place it would take are drawn, and on `released` it is docked where the
+/// pointer is. True when it was docked (it is then in `dock`).
+pub fn offer_detached(
+    ctx: &egui::Context,
+    theme: &Theme,
+    dock: &mut DockState<PanelTab>,
+    panel: PanelTab,
+    at: Pos2,
+    released: bool,
+) -> bool {
+    // The panel's own size matters only for how much of the drawing it takes.
+    let size = Vec2::from(crate::detached::OPENS_AT_LEAST);
+    let found = targets::targets(dock, panel, size, at);
+    let drop = targets::drop_at(dock, &found, at);
+    if !released {
+        let d = Dragged {
+            panel,
+            size: Vec2::ZERO,
+            pointer: at,
+        };
+        paint(ctx, theme, &found, drop, d);
+        return false;
+    }
+    match drop {
+        Drop::Dock(target) => {
+            targets::insert(dock, panel, target);
+            true
+        }
+        Drop::TabBar => targets::join_bar(dock, panel, at),
+        Drop::Float => false,
+    }
+}
+
 /// A floating panel's window is framed like a docked panel: square, with
 /// its one-point border right round the tab bar and contents, not the
 /// padding and rounded corners of a dialog. egui_dock frames its windows

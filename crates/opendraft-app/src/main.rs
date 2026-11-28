@@ -59,6 +59,7 @@ mod corner_memory;
 mod corners;
 mod crash_log;
 mod defaults;
+mod detached;
 mod dialogs;
 mod dim_override_cmd;
 mod dim_style_draft;
@@ -278,7 +279,8 @@ fn app_creator() -> eframe::AppCreator<'static> {
         // The interface scale is set in Options, not by egui's own
         // Ctrl+Plus and Ctrl+Minus.
         cc.egui_ctx.options_mut(|o| o.zoom_with_keyboard = false);
-        let dock = dock::load(cc.storage);
+        let (dock, places) = dock::load(cc.storage);
+        let dock = (dock, places, detached::Detached::load(cc.storage));
         let recent = recent::RecentFiles::load(cc.storage);
         let updates = updates::Updates::new(updates::Updates::load(cc.storage));
         // Drawings named on the command line (or handed over by a file

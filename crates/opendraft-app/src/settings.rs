@@ -85,6 +85,10 @@ pub struct Settings {
     pub show_grid: bool,
     /// The navigation gizmo in the top right corner of the drawing.
     pub show_nav_gizmo: bool,
+    /// Dialogs and floating panels open as their own operating system
+    /// windows, which can be moved to another monitor, instead of inside the
+    /// main window. On unless turned off.
+    pub popout_windows: bool,
     /// The `[-][Top][2D Wireframe]` label in the drawing's top-left corner
     /// (`VPCONTROL`).
     pub show_viewport_controls: bool,
@@ -166,6 +170,7 @@ impl Default for Settings {
             layout_paper_colour: Default::default(),
             show_grid: true,
             show_nav_gizmo: true,
+            popout_windows: true,
             show_viewport_controls: true,
             grid_spacing: 10.0,
             ui_scale_percent: 100,
@@ -423,6 +428,7 @@ mod tests {
             layout_paper_colour: crate::paper_colour::PaperColour::Cream,
             show_grid: false,
             show_nav_gizmo: false,
+            popout_windows: false,
             show_viewport_controls: false,
             grid_spacing: 2.5,
             ui_scale_percent: 125,
@@ -504,6 +510,13 @@ mod tests {
         assert_eq!(loaded.autosave_minutes, default.autosave_minutes);
         assert_eq!(loaded.grid_spacing, 4.0, "the good fields survive");
         assert!(loaded.automation_enabled);
+    }
+
+    #[test]
+    fn dialogs_and_panels_pop_out_unless_the_user_turned_it_off() {
+        assert!(Settings::default().popout_windows);
+        assert!(Settings::from_json(r#"{"grid_spacing":3.0}"#).popout_windows);
+        assert!(!Settings::from_json(r#"{"popout_windows":false}"#).popout_windows);
     }
 
     #[test]
