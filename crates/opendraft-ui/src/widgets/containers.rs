@@ -20,7 +20,7 @@ pub fn dialog<R>(
     width: f32,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> Option<R> {
-    if viewport_mode() {
+    if viewport_mode(ctx) {
         return dialog_window(ctx, theme, title, open, width, add_contents);
     }
     let c = &theme.colors;

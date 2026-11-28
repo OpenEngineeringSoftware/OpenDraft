@@ -1,22 +1,24 @@
 //! A dialog shown as a real OS window instead of a window inside the main one.
-//! Off unless the user turns it on (Settings, Display); `containers::dialog`
-//! chooses between the two.
-
-use std::sync::atomic::{AtomicBool, Ordering};
+//! The user chooses it in Settings, Display; `containers::dialog` chooses
+//! between the two. Without a choice made on the context, a dialog is a window
+//! inside the main one.
 
 use egui::{Margin, Ui};
 
 use crate::Theme;
 
-static IN_WINDOWS: AtomicBool = AtomicBool::new(false);
-
-/// Choose where dialogs open: `true` is their own OS windows.
-pub fn set_dialogs_in_windows(on: bool) {
-    IN_WINDOWS.store(on, Ordering::Relaxed);
+fn mode_id() -> egui::Id {
+    egui::Id::new("dialogs_in_windows")
 }
 
-pub(super) fn viewport_mode() -> bool {
-    IN_WINDOWS.load(Ordering::Relaxed)
+/// Choose where dialogs open, for what `ctx` shows: `true` is their own OS
+/// windows. Kept on the context, so two contexts (two tests) do not share it.
+pub fn set_dialogs_in_windows(ctx: &egui::Context, on: bool) {
+    ctx.data_mut(|d| d.insert_temp(mode_id(), on));
+}
+
+pub(super) fn viewport_mode(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(mode_id())).unwrap_or(false)
 }
 
 /// The dialog as its own OS window (an immediate viewport): the same body,

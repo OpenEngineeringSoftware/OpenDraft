@@ -118,10 +118,6 @@ fn display_right(ui: &mut egui::Ui, theme: &Theme, draft: &mut Settings) {
         });
         ui.checkbox(&mut draft.show_nav_gizmo, "Show the navigation gizmo");
         ui.checkbox(
-            &mut draft.dialogs_in_windows,
-            "Open dialogs in their own windows (can be moved to another monitor)",
-        );
-        ui.checkbox(
             &mut draft.show_viewport_controls,
             "Display the viewport controls",
         )
@@ -150,6 +146,17 @@ fn display_right(ui: &mut egui::Ui, theme: &Theme, draft: &mut Settings) {
                 },
             );
         });
+    });
+    ui.add_space(6.0);
+    widgets::group_box(ui, theme, "Windows", |ui| {
+        ui.checkbox(
+            &mut draft.popout_windows,
+            "Dialogs and panels pop out as windows",
+        )
+        .on_hover_text(
+            "Dialogs and floating panels open as their own windows, which can be moved to \
+                 another monitor. Off keeps them inside the main window.",
+        );
     });
     ui.add_space(6.0);
     crate::language::settings_group(ui, theme, draft);

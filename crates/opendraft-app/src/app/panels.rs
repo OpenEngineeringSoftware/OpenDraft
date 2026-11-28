@@ -29,7 +29,7 @@ impl OpenDraftApp {
             Some(_) => (rows.height(2), rows.height(0)),
             None => (dock::COMMAND_LINE_MIN_HEIGHT, dock::COLLAPSED_HEIGHT),
         };
-        let in_windows = self.state.settings.dialogs_in_windows;
+        let in_windows = self.state.settings.popout_windows;
         let (space, settings) = (self.state.space(), &self.state.settings);
         let (paper, colour) = (settings.layout_paper, settings.layout_paper_colour);
         let mut viewer = PanelViewer {
