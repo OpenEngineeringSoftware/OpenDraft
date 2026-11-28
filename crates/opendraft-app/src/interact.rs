@@ -199,10 +199,14 @@ impl AppState {
         self.take_zoom_requests();
     }
 
-    /// Wait for the running command to ask or end (tests).
+    /// Wait for the running command to ask or end (tests). Each request is
+    /// given a minute, not seconds: a command that writes the block library
+    /// waits for the disk (the library syncs every write), which on a slow
+    /// or busy runner has taken longer than five seconds. A command that
+    /// really never asks still fails the test, a minute late.
     #[cfg(test)]
     pub fn settle_command(&mut self) {
-        self.pump(Duration::from_secs(5));
+        self.pump(Duration::from_secs(60));
     }
 
     pub(crate) fn waiting(&self) -> Option<&Ask> {
