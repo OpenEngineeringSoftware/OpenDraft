@@ -5,6 +5,8 @@
 
 use egui::{Margin, Ui};
 
+use super::placement;
+
 use crate::Theme;
 
 fn mode_id() -> egui::Id {
@@ -52,6 +54,14 @@ pub fn bring_dialogs_back(ctx: &egui::Context) {
     ctx.data_mut(|d| d.insert_temp(epoch_id(), next));
 }
 
+/// The pixels (of the whole screen) at which a window of `size` points has its
+/// top-left corner when it is in the middle of the main window.
+fn centred_px(ctx: &egui::Context, size: egui::Vec2) -> Option<egui::Pos2> {
+    let main = ctx.input(|i| i.viewport().outer_rect)?;
+    let ppp = ctx.pixels_per_point();
+    Some(((main.center().to_vec2() - size / 2.0) * ppp).to_pos2())
+}
+
 pub(super) fn viewport_mode(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<bool>(mode_id())).unwrap_or(false)
 }
@@ -71,14 +81,15 @@ pub(super) fn dialog_window<R>(
     let size_id = egui::Id::new(("dialog_vp_size", title));
     let known = ctx.data(|d| d.get_temp::<egui::Vec2>(size_id));
     let size = known.unwrap_or(egui::vec2(width + 2.0 * margin, 160.0));
-    // Position: where it was last left, else centred over the main window.
-    // Fixed for as long as the dialog stays open (a builder that keeps
-    // changing would fight the user's drag).
+    // Position, in pixels of the whole screen (see `placement`): where it was
+    // last left, else centred over the main window. Fixed for as long as the
+    // dialog stays open, so it does not fight the user's drag.
     let pass = ctx.cumulative_pass_nr();
     let seen_id = egui::Id::new(("dialog_vp_seen", title));
     let last_pos_id = egui::Id::new(("dialog_vp_last_pos", title));
     let start_id = egui::Id::new(("dialog_vp_start", title));
     let centred_id = egui::Id::new(("dialog_vp_centred", title));
+    let placed_id = egui::Id::new(("dialog_vp_placed", title));
     let epoch_now = epoch(ctx);
     let seen = ctx.data(|d| d.get_temp::<u64>(seen_id));
     ctx.data_mut(|d| d.insert_temp(seen_id, pass));
@@ -88,32 +99,36 @@ pub(super) fn dialog_window<R>(
             .data(|d| d.get_temp::<(egui::Pos2, u64)>(last_pos_id))
             .filter(|(_, e)| *e == epoch_now)
             .map(|(p, _)| p);
-        let main = ctx.input(|i| i.viewport().outer_rect);
-        let start = remembered.or(main.map(|m| m.center() - size / 2.0));
+        let start = remembered.or_else(|| centred_px(ctx, size));
+        placement::forget(ctx, placed_id);
         ctx.data_mut(|d| d.insert_temp(centred_id, remembered.is_none()));
         ctx.data_mut(|d| match start {
             Some(p) => d.insert_temp(start_id, p),
             None => d.remove::<egui::Pos2>(start_id),
         });
     }
-    let mut builder = egui::ViewportBuilder::default()
+    let builder = egui::ViewportBuilder::default()
         .with_title(title)
         .with_inner_size(size)
         .with_resizable(false)
         .with_minimize_button(false)
         .with_maximize_button(false)
         .with_window_level(egui::WindowLevel::AlwaysOnTop);
-    if let Some(p) = ctx.data(|d| d.get_temp::<egui::Pos2>(start_id)) {
-        builder = builder.with_position(p);
-    }
     let id = egui::ViewportId::from_hash_of(("dialog_vp", title));
     let mut add = Some(add_contents);
     let mut result = None;
     let mut used = None;
     ctx.show_viewport_immediate(id, builder, |ctx, _class| {
         keep_above_main(ctx, egui::Id::new(("dialog_vp_top", title)));
-        if let Some(outer) = ctx.input(|i| i.viewport().outer_rect) {
-            ctx.data_mut(|d| d.insert_temp(last_pos_id, (outer.min, epoch_now)));
+        // Put where it is meant to be, by commands from in here, where the
+        // window's own scale is known; remember where it is only once it is.
+        let placed = match ctx.data(|d| d.get_temp::<egui::Pos2>(start_id)) {
+            Some(at) => placement::settle(ctx, placed_id, at),
+            None => true,
+        };
+        if let (true, Some(outer)) = (placed, ctx.input(|i| i.viewport().outer_rect)) {
+            let at = (outer.min.to_vec2() * ctx.pixels_per_point()).to_pos2();
+            ctx.data_mut(|d| d.insert_temp(last_pos_id, (at, epoch_now)));
         }
         egui::CentralPanel::default()
             .frame(
@@ -146,11 +161,8 @@ pub(super) fn dialog_window<R>(
             // A first guess of the size centred it; centre it on the real one.
             let centred =
                 known.is_none() && ctx.data(|d| d.get_temp::<bool>(centred_id)) == Some(true);
-            let main = ctx.input(|i| i.viewport().outer_rect);
-            if let (true, Some(main)) = (centred, main) {
-                let at = main.center() - used / 2.0;
+            if let (true, Some(at)) = (centred, centred_px(ctx, used)) {
                 ctx.data_mut(|d| d.insert_temp(start_id, at));
-                ctx.send_viewport_cmd_to(id, egui::ViewportCommand::OuterPosition(at));
             }
         }
     }

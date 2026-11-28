@@ -71,6 +71,7 @@ fn settle(
         }
         return;
     }
+    let ppp = ctx.pixels_per_point();
     let origin = ctx
         .input(|i| i.viewport().inner_rect.or(i.viewport().outer_rect))
         .map(|r| r.min.to_vec2());
@@ -83,7 +84,8 @@ fn settle(
         };
         let (at, size) = match (rect, origin) {
             (Some(r), Some(o)) => {
-                let p = r.min + o;
+                // Points of this window, to the pixels of the whole screen.
+                let p = (r.min.to_vec2() + o) * ppp;
                 (Some([p.x, p.y]), big(r))
             }
             (Some(r), None) => (None, big(r)),
@@ -110,17 +112,25 @@ fn show(
         let (at, size) = detached.start(&w);
         let theme = viewer.theme;
         let title = opendraft_ui::i18n::tr(panel.title()).to_string();
-        let mut builder = egui::ViewportBuilder::default()
+        let builder = egui::ViewportBuilder::default()
             .with_title(title.as_str())
             .with_inner_size(size)
             .with_min_inner_size(LEAST)
             .with_decorations(false)
             .with_taskbar(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop);
-        if let Some(p) = at {
-            builder = builder.with_position(egui::pos2(p[0], p[1]));
-        }
+        // The position is not in the builder: egui would turn it into pixels
+        // with the primary monitor's scale. It is applied from inside the
+        // window (`placement`), once its own scale is known.
         let id = egui::ViewportId::from_hash_of(("panel_window", panel));
+        let placed_key = egui::Id::new(("panel_window_placed", panel));
+        let pass = ctx.cumulative_pass_nr();
+        let seen_key = egui::Id::new(("panel_window_seen", panel));
+        let fresh = !matches!(ctx.data(|d| d.get_temp::<u64>(seen_key)), Some(s) if s + 1 >= pass);
+        ctx.data_mut(|d| d.insert_temp(seen_key, pass));
+        if fresh {
+            opendraft_ui::widgets::forget_placement(ctx, placed_key);
+        }
         let mut seen = None;
         let mut tab = panel;
         ctx.show_viewport_immediate(id, builder, |ctx, _class| {
@@ -148,10 +158,19 @@ fn show(
             if ctx.input(|i| i.viewport().close_requested()) {
                 asked.close.push(panel);
             }
+            let placed = match at {
+                Some(p) => {
+                    opendraft_ui::widgets::settle_placement(ctx, placed_key, egui::pos2(p[0], p[1]))
+                }
+                None => true,
+            };
+            let ppp = ctx.pixels_per_point();
             let (outer, inner) = ctx.input(|i| (i.viewport().outer_rect, i.viewport().inner_rect));
-            // Not while the window is shrunk to be carried.
-            if let (Some(o), Some(i)) = (outer, inner.filter(|i| i.height() > 60.0)) {
-                seen = Some(([o.min.x, o.min.y], [i.width(), i.height()]));
+            // Not before it is where it was meant to be, and not while it is
+            // shrunk to be carried.
+            if let (true, Some(o), Some(i)) = (placed, outer, inner.filter(|i| i.height() > 60.0)) {
+                let at = o.min.to_vec2() * ppp;
+                seen = Some(([at.x, at.y], [i.width(), i.height()]));
             }
         });
         if let Some((at, size)) = seen {
@@ -197,17 +216,20 @@ pub(super) fn run(
     viewer: &mut PanelViewer<'_>,
 ) {
     settle(ctx, on, dock, places, detached);
+    let ppp = ctx.pixels_per_point();
     if detached.take_bring_back() {
         // Over the main window, wherever the windows were left.
         if let Some(main) = ctx.input(|i| i.viewport().inner_rect) {
-            detached.bring_back(main);
+            detached.bring_back(main * ppp, ppp);
         }
     }
     let asked = show(ctx, fill, detached, viewer);
     if let Some((panel, moved)) = asked.moved {
-        let main = ctx.input(|i| i.viewport().inner_rect);
+        // The pointer is in pixels of the whole screen, whatever monitor the
+        // window it came from is on; so is the main window's inside here.
+        let main = ctx.input(|i| i.viewport().inner_rect).map(|r| r * ppp);
         if let Some(main) = main.filter(|r| r.contains(moved.pointer)) {
-            let at = moved.pointer - main.min.to_vec2();
+            let at = ((moved.pointer - main.min) / ppp).to_pos2();
             let theme = viewer.theme;
             if dock::offer_detached(ctx, theme, dock, panel, at, moved.released) {
                 detached.remove(panel);

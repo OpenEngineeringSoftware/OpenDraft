@@ -31,7 +31,8 @@ struct Carry {
 
 /// A handle was dragged this frame.
 pub(super) struct Moved {
-    /// The pointer on the screen (not in a window).
+    /// The pointer on the screen, in pixels of the whole screen (not points of
+    /// a window: the windows involved may be on monitors of different scales).
     pub pointer: Pos2,
     pub released: bool,
 }
@@ -130,7 +131,11 @@ fn carry(ctx: &egui::Context, drag: &egui::Response, panel: PanelTab) -> Option<
     }
     let key = egui::Id::new(("panel_carry", panel));
     let (inner, local) = ctx.input(|i| (i.viewport().inner_rect, i.pointer.latest_pos()));
-    let pointer = inner.zip(local).map(|(inner, p)| inner.min + p.to_vec2());
+    let ppp = ctx.pixels_per_point();
+    // In this window's points (for what is sent to it) and in pixels (for
+    // comparing with other windows).
+    let pointer_pts = inner.zip(local).map(|(inner, p)| inner.min + p.to_vec2());
+    let pointer = pointer_pts.map(|p| (p.to_vec2() * ppp).to_pos2());
     if drag.drag_started() {
         let size = inner.map_or(Vec2::from(LEAST), |r| r.size());
         let pointer = pointer.unwrap_or_default();
@@ -147,7 +152,9 @@ fn carry(ctx: &egui::Context, drag: &egui::Response, panel: PanelTab) -> Option<
         let pointer = pointer?;
         let mut carry: Carry = ctx.data(|d| d.get_temp(key))?;
         carry.pointer = pointer;
-        let main = ctx.input_for(egui::ViewportId::ROOT, |i| i.viewport().inner_rect);
+        let main = ctx.input_for(egui::ViewportId::ROOT, |i| {
+            i.viewport().inner_rect.map(|r| r * i.pixels_per_point())
+        });
         let over_main = main.is_some_and(|m| m.contains(pointer));
         if over_main != carry.shrunk {
             carry.shrunk = over_main;
@@ -160,7 +167,9 @@ fn carry(ctx: &egui::Context, drag: &egui::Response, panel: PanelTab) -> Option<
         }
         ctx.data_mut(|d| d.insert_temp(key, carry));
         let grab = if carry.shrunk { GRIP } else { carry.grab };
-        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pointer - grab));
+        if let Some(pts) = pointer_pts {
+            ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pts - grab));
+        }
         ctx.request_repaint();
         return Some(Moved {
             pointer,
