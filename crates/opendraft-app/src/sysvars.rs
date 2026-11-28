@@ -285,6 +285,19 @@ fn build() -> Vec<SysVar<AppState>> {
         SysVar::read_only("DWGNAME", "Name of the current drawing", Kind::Text, |s| {
             Value::Text(s.docs[s.active].title.clone())
         }),
+        SysVar::int(
+            "VISRETAIN",
+            "Keep xref layer properties on reload: 0 no, 1 yes",
+            (0, 1),
+            |s| flag(s.session().document().visretain()),
+            |s, v| {
+                s.perform(opendraft_commands::SetVisretain::new(
+                    "VISRETAIN",
+                    int(v) == 1,
+                ));
+                Ok(())
+            },
+        ),
     ]
 }
 
