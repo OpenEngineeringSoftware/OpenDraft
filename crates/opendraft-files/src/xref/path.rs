@@ -121,6 +121,11 @@ pub fn format_saved_path(
 
 /// `source` relative to `host`, or `None` when they share no root.
 fn relative(source: &Path, host: &Path) -> Option<String> {
+    // The leading drive and root: sharing only these is not sharing a folder.
+    let anchors = host
+        .components()
+        .take_while(|c| matches!(c, Component::Prefix(_) | Component::RootDir))
+        .count();
     let host = keyed(host);
     let source = keyed(source);
     let shared = host
@@ -128,7 +133,9 @@ fn relative(source: &Path, host: &Path) -> Option<String> {
         .zip(source.iter())
         .take_while(|((a, _), (b, _))| a == b)
         .count();
-    if shared == 0 {
+    // `../work/base.dwg` from `/sheets` would reach the file, but only by
+    // way of the root, so the path is kept absolute.
+    if shared <= anchors {
         return None;
     }
     // Different volumes or roots never share a relative path.
