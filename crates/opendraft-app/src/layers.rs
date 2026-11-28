@@ -207,6 +207,8 @@ impl AppState {
             self.message = key!("Layer 0 cannot be renamed").to_owned();
         } else if name.is_empty() {
             self.message = key!("A layer needs a name").to_owned();
+        } else if let Some(problem) = document.layer_rename_problem(id, name) {
+            self.message = problem.to_owned();
         } else if document.layer_name_taken(name, Some(id)) {
             self.set_message(Wording::new(
                 key!("A layer called %{name} already exists"),

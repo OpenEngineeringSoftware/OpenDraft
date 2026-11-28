@@ -645,6 +645,16 @@ mod tests {
     }
 
     #[test]
+    fn only_a_reference_layer_keeps_a_pipe_in_its_dxf_name() {
+        let mut doc = Document::default();
+        let id = doc.allocate_layer_id();
+        doc.push_layer(Layer::new(id, "a|b"));
+        let bytes = write(&doc).unwrap().bytes;
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("a_b") && !text.contains("a|b"));
+    }
+
+    #[test]
     fn embedded_plot_settings_round_trip_semantically() {
         let mut original = drawing();
         let mut layouts = original.layouts().to_vec();

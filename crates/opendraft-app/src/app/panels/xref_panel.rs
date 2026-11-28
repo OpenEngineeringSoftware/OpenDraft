@@ -21,6 +21,7 @@ use crate::xref_cmd;
 enum Health {
     Loaded,
     Unloaded,
+    NotLoaded,
     Unreferenced,
     NotFound,
     ShowingSaved,
@@ -33,6 +34,7 @@ impl Health {
         match self {
             Self::Loaded => key!("Loaded"),
             Self::Unloaded => key!("Unloaded"),
+            Self::NotLoaded => key!("Not loaded"),
             Self::Unreferenced => key!("Unreferenced"),
             Self::NotFound => key!("Not Found"),
             Self::ShowingSaved => key!("Not Found — showing saved copy"),
@@ -269,6 +271,9 @@ fn health(
 ) -> Health {
     if !referenced {
         return Health::Unreferenced;
+    }
+    if xref.never_loaded() {
+        return Health::NotLoaded;
     }
     if xref.unloaded {
         return Health::Unloaded;

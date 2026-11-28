@@ -383,3 +383,35 @@ fn an_object_and_its_reference_are_not_confused() {
         Some(ROOT)
     );
 }
+
+#[test]
+fn a_bound_layer_and_the_root_block_keep_their_names() {
+    let (doc, walls, host) = sample();
+    assert!(doc.layer_rename_problem(walls, "Other").is_some());
+    assert_eq!(doc.layer_rename_problem(host, "Plain"), None);
+    assert!(
+        doc.layer_rename_problem(host, "base|Plain").is_some(),
+        "the pipe belongs to reference layers"
+    );
+    assert!(doc.renamed_block(ROOT, "other").is_err());
+    assert!(doc
+        .block_in_unit(ROOT, crate::InsertUnits::from_code(4).unwrap())
+        .is_err());
+}
+
+#[test]
+fn a_reference_that_was_never_read_is_told_from_one_the_user_unloaded() {
+    let (doc, ..) = sample();
+    let mut xref = doc.xrefs()[0].clone();
+    assert!(!xref.never_loaded());
+    xref.unloaded = true;
+    assert!(xref.never_loaded());
+    xref.stamp = Some(crate::XrefStamp {
+        length: 1,
+        modified: 1,
+    });
+    assert!(
+        !xref.never_loaded(),
+        "an unloaded reference keeps its stamp"
+    );
+}

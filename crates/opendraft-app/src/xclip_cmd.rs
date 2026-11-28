@@ -196,14 +196,15 @@ fn edit_records(
 mod tests {
     use std::sync::atomic::AtomicBool;
 
+    use opendraft_core::XrefLoadRequest;
     use opendraft_core::{BlockId, Document, Entity, Point, XrefPathType};
-    use opendraft_files::{plan_xref, XrefLimits, XrefPlanRequest};
+    use opendraft_files::{plan_xref, XrefLimits};
 
     use crate::state::AppState;
     use crate::xref_apply::attach;
 
-    fn request() -> XrefPlanRequest {
-        XrefPlanRequest {
+    fn request() -> XrefLoadRequest {
+        XrefLoadRequest {
             block: None,
             name: "base".to_owned(),
             source_path: "/work/base.dwg".to_owned(),

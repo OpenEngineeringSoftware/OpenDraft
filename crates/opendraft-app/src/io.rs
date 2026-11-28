@@ -50,6 +50,12 @@ pub enum Done {
     /// One pass of recovery copies: for each drawing written, where its
     /// history stood and whether it worked.
     Autosaved(Vec<(u64, u64, std::io::Result<()>)>),
+    /// A source drawing read and planned for an external reference, with the
+    /// request it answers. The reply is the plan or why there is none.
+    XrefPlanned {
+        request: Box<opendraft_core::XrefLoadRequest>,
+        reply: Box<opendraft_commands::Reply>,
+    },
     /// Nothing to report (a recovery copy was removed).
     Finished,
 }
@@ -130,6 +136,11 @@ impl Io {
     /// Whether any job has not been collected (or given up on) yet.
     pub fn busy(&self) -> bool {
         !self.live.is_empty()
+    }
+
+    /// Whether job `id` has not been collected or given up on.
+    pub fn is_live(&self, id: u64) -> bool {
+        self.live.iter().any(|r| r.id == id)
     }
 
     /// Whether a job the user could cancel has been running for `after`.

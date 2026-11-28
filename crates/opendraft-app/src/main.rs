@@ -243,6 +243,7 @@ mod xref_apply;
 mod xref_cmd;
 mod xref_defaults;
 mod xref_load;
+mod xref_source;
 mod zoom_cmd;
 
 use eframe::egui;

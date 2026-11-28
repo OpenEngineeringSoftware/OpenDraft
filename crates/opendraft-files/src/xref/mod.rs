@@ -13,5 +13,5 @@ mod source;
 
 pub use error::{XrefLoadError, XrefPlanError};
 pub use path::{classify, format_saved_path, resolve, stamp, XrefPathError};
-pub use plan::{plan_xref, XrefPlanRequest};
+pub use plan::plan_xref;
 pub use source::{read_source, XrefLimits, XrefSource};

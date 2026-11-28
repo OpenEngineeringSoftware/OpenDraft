@@ -5,8 +5,6 @@
 //! `XATTACH` opens the Attach External Reference dialog; `-XREF` is the
 //! command-line form, and the palette uses the same pieces.
 
-use std::path::Path;
-
 use opendraft_commands::{
     Cancelled, Command, Editor, NumberOptions, Options, PointOptions, Wording, XrefHostDir,
 };
@@ -18,6 +16,7 @@ use opendraft_ui::key;
 use crate::state::AppState;
 use crate::xref_apply;
 use crate::xref_defaults::defaults_of;
+use crate::xref_source::{source_problem, stem_of};
 
 /// The commands, for the command table.
 pub fn commands() -> Vec<Command<AppState>> {
@@ -96,7 +95,13 @@ fn list(ed: &mut Editor) -> Result<(), Cancelled> {
             .iter()
             .filter_map(|xref| {
                 let block = doc.block(xref.block)?;
-                let status = if xref.unloaded { "Unloaded" } else { "Loaded" };
+                let status = if xref.never_loaded() {
+                    "Not loaded"
+                } else if xref.unloaded {
+                    "Unloaded"
+                } else {
+                    "Loaded"
+                };
                 Some(format!(
                     "  \"{}\": {} {} {status} {}",
                     block.name,
@@ -138,14 +143,6 @@ fn host_dir(ed: &Editor) -> Option<String> {
         .and_then(|dir| dir.0.clone())
 }
 
-/// The name a source file suggests for its reference: the stem, or "xref".
-fn stem_of(path: &str) -> String {
-    Path::new(path)
-        .file_stem()
-        .map(|stem| stem.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "xref".to_owned())
-}
-
 /// `XATTACH`: the source file is named, then the Attach External Reference
 /// dialog fills in the rest. Anything left "on-screen" is asked in the
 /// drawing once the dialog closes.
@@ -155,8 +152,8 @@ pub(crate) fn attach_dialog(ed: &mut Editor) -> Result<(), Cancelled> {
     let source_path = ed.get_string(Options::<String>::new(key!(
         "Enter name of file to attach:"
     )))?;
-    if let Some(problem) = path_problem(&source_path) {
-        ed.say(problem.to_string());
+    if let Some(problem) = source_problem(&source_path, dir.as_deref()) {
+        ed.say(problem);
         return Ok(());
     }
     let draft = XrefAttachDraft {
@@ -202,6 +199,7 @@ pub(crate) fn attach_dialog(ed: &mut Editor) -> Result<(), Cancelled> {
         path_type: draft.path_type,
         kind: draft.kind,
         host_dir: dir,
+        host_path: None,
     };
     plan_and_attach(ed, request, at, scale, rotation)
 }
@@ -215,8 +213,25 @@ pub(crate) fn attach(ed: &mut Editor, kind: XrefKind) -> Result<(), Cancelled> {
     let source_path = ed.get_string(Options::<String>::new(key!(
         "Enter name of file to attach:"
     )))?;
+    if let Some(problem) = source_problem(&source_path, dir.as_deref()) {
+        ed.say(problem);
+        return Ok(());
+    }
     let stem = stem_of(&source_path);
     let name = ed.get_string(Options::<String>::new(key!("Enter reference name")).default(stem))?;
+    let draft = XrefAttachDraft {
+        source_path: source_path.clone(),
+        name: name.clone(),
+        kind,
+        path_type,
+        insertion: None,
+        scale: None,
+        rotation: None,
+    };
+    if let Some(problem) = ed.read(move |doc| draft.problem(doc))? {
+        ed.say(problem);
+        return Ok(());
+    }
     let at = ed.get_point(PointOptions::new(key!("Specify insertion point:")))?;
     let scale =
         ed.get_number(NumberOptions::new(key!("Specify scale factor <1>:")).default(1.0))?;
@@ -233,6 +248,7 @@ pub(crate) fn attach(ed: &mut Editor, kind: XrefKind) -> Result<(), Cancelled> {
         path_type,
         kind,
         host_dir: dir,
+        host_path: None,
     };
     plan_and_attach(ed, request, at, (scale, scale), rotation)
 }
@@ -295,6 +311,7 @@ pub(crate) fn reload_block(ed: &mut Editor, block: BlockId) -> Result<(), Cancel
             path_type: xref.path_type,
             kind: xref.kind,
             host_dir: dir.clone(),
+            host_path: None,
         })
     })?;
     let Some(request) = request else {
@@ -539,6 +556,52 @@ mod tests {
         assert_eq!(insert.rotation, std::f64::consts::FRAC_PI_2);
         assert_eq!(doc.validate(), Ok(()));
 
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+#[cfg(test)]
+mod early_check_tests {
+    use super::*;
+
+    fn said(state: &AppState, text: &str) -> bool {
+        state.cmdline.log.iter().any(|l| l.contains(text))
+    }
+
+    #[test]
+    fn a_missing_source_ends_the_dialog_command_before_it_asks_for_a_point() {
+        let path =
+            std::env::temp_dir().join(format!("od-xref-missing-{}.odraft", std::process::id()));
+        let mut state = AppState::new();
+        state.start_command("XATTACH", attach_dialog);
+        state.settle_command();
+        state.cmd_submit(&path.to_string_lossy());
+        state.settle_command();
+        assert!(!state.command_running());
+        assert!(said(&state, "not found"), "{:?}", state.cmdline.log);
+    }
+
+    #[test]
+    fn a_bad_name_ends_the_command_line_attach_before_the_questions() {
+        use opendraft_core::{Document, Entity, Point};
+        use opendraft_files::{FileFormat, NativeFormat};
+
+        let source = Document::from_entities([Entity::Line {
+            start: Point::new(0.0, 0.0),
+            end: Point::new(1.0, 0.0),
+        }]);
+        let path = std::env::temp_dir().join(format!("od-xref-name-{}.odraft", std::process::id()));
+        std::fs::write(&path, NativeFormat.write(&source).unwrap().bytes).unwrap();
+
+        let mut state = AppState::new();
+        state.start_command("-XREF", |ed| attach(ed, XrefKind::Attach));
+        state.settle_command();
+        state.cmd_submit(&path.to_string_lossy());
+        state.settle_command();
+        state.cmd_submit("a|b");
+        state.settle_command();
+        assert!(!state.command_running(), "no insertion point was asked");
+        assert!(state.session().document().xrefs().is_empty());
         let _ = std::fs::remove_file(path);
     }
 }

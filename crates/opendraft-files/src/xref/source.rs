@@ -61,6 +61,9 @@ pub fn read_source(
     };
     let length = std::fs::metadata(path)?.len();
     format.check_size(length)?;
+    // The stamp is taken before the read: a file that changes while it is
+    // read then looks changed, never current.
+    let stamp = stamp(path);
     let bytes = std::fs::read(path)?;
     let loaded = format.read_cancellable(&bytes, cancelled)?;
     loaded
@@ -102,7 +105,7 @@ pub fn read_source(
     Ok(XrefSource {
         document: loaded.document,
         path: path.to_owned(),
-        stamp: stamp(path),
+        stamp,
         warnings: loaded.warnings,
     })
 }

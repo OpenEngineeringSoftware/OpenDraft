@@ -1,7 +1,9 @@
 //! The `XREFTYPE`, `REFPATHTYPE` and `BINDTYPE` defaults a reference command
 //! starts from, read when the command starts.
 
-use opendraft_commands::Editor;
+use std::sync::Arc;
+
+use opendraft_commands::{Context, Editor, XrefHostDir};
 use opendraft_core::{BindType, XrefPathType};
 
 use crate::state::AppState;
@@ -33,6 +35,14 @@ pub(crate) fn defaults_of(ed: &Editor) -> XrefDefaults {
 }
 
 impl AppState {
+    /// `context` with what the reference commands read: the drawing's
+    /// folder and the defaults above.
+    pub(crate) fn with_xref_context(&self, context: Context) -> Context {
+        context
+            .with(Arc::new(XrefHostDir(self.xref_host_dir())))
+            .with(Arc::new(self.xref_defaults()))
+    }
+
     /// The reference type, path type and bind type a command starts from,
     /// read when it starts (`XREFTYPE`, `REFPATHTYPE`, `BINDTYPE`).
     pub(crate) fn xref_defaults(&self) -> XrefDefaults {

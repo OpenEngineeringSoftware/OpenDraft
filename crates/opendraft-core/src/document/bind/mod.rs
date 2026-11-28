@@ -107,6 +107,9 @@ impl<'a> Binder<'a> {
     fn bind_reference(&mut self, root: BlockId, record: &crate::XrefDef) -> Result<(), BindError> {
         let name = self.xref_name(root);
         let root_def = self.doc.block(root).ok_or(BindError::NotAnXref(root))?;
+        if record.unloaded {
+            return Err(BindError::Unloaded(name));
+        }
         self.check_content(&name, root_def)?;
         if record.clip.is_some() {
             return Err(BindError::Clipped { reference: name });

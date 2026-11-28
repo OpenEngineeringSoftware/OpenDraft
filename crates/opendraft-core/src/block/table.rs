@@ -59,6 +59,11 @@ impl BlockDef {
     }
 }
 
+/// Why an external reference's root block keeps its name and unit: its
+/// bound layers are named after it and its source sets the unit.
+const XREF_BLOCK_FIXED: &str =
+    "An external reference's name and unit come from its reference; detach it to change them.";
+
 /// What redefining a block changes: the new block table, and the objects
 /// whose inserts now point at new records.
 #[derive(Clone, Debug)]
@@ -139,6 +144,9 @@ impl Document {
         let Some(old) = self.block(id) else {
             return Err("That block is no longer in the drawing.".to_owned());
         };
+        if self.is_xref_block(id) {
+            return Err(XREF_BLOCK_FIXED.to_owned());
+        }
         if let Some(problem) = block_name_problem(name) {
             return Err(problem.to_owned());
         }
@@ -162,6 +170,9 @@ impl Document {
         let Some(old) = self.block(id) else {
             return Err("That block is no longer in the drawing.".to_owned());
         };
+        if self.is_xref_block(id) {
+            return Err(XREF_BLOCK_FIXED.to_owned());
+        }
         let mut def = (**old).clone();
         def.unit = unit;
         self.redefined_blocks(def).map_err(str::to_owned)

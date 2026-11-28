@@ -12,10 +12,15 @@ pub(crate) fn dxf_name(name: &str) -> String {
     name_with(name, false)
 }
 
-/// A layer name: the same, except `|`, which an external reference's bound
-/// layer names (`<xref>|<layer>`) use and AutoCAD keeps.
-pub(crate) fn dxf_layer_name(name: &str) -> String {
-    name_with(name, true)
+/// A layer's name: as [`dxf_name`], except that an external reference's
+/// bound layer keeps the `|` of its `<xref>|<layer>` name, as AutoCAD does.
+/// An ordinary layer never does, so the file cannot hold a layer that reads
+/// as dependent on a reference that is not there.
+pub(crate) fn dxf_layer_name(
+    document: &opendraft_core::Document,
+    layer: &opendraft_core::Layer,
+) -> String {
+    name_with(&layer.name, document.xref_layer_owner(layer.id).is_some())
 }
 
 fn name_with(name: &str, keep_pipe: bool) -> String {

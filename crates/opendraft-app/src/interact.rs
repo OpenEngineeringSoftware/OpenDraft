@@ -44,11 +44,8 @@ impl AppState {
         let context = Context::default()
             .with(Arc::clone(self.defaults()))
             .with(Arc::clone(&self.block_requests))
-            .with(Arc::new(self.field_context()))
-            .with(Arc::new(opendraft_commands::XrefHostDir(
-                self.xref_host_dir(),
-            )))
-            .with(Arc::new(self.xref_defaults()));
+            .with(Arc::new(self.field_context()));
+        let context = self.with_xref_context(context);
         self.runner = Some(Runner::start_with(name, pickset, context, command));
         self.run_doc = self.active;
         self.pump_command();

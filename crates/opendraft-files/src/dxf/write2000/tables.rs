@@ -107,7 +107,7 @@ pub(super) fn write_tables(
         let handle = ids.layers[&layer.id];
         let (index, _) = aci_for(layer.color);
         record(out, "LAYER", owner, "AcDbLayerTableRecord", handle);
-        out.pair(2, crate::dxf::write::dxf_layer_name(&layer.name));
+        out.pair(2, crate::dxf::write::dxf_layer_name(document, layer));
         // Frozen, locked, and (for a bound layer) externally dependent and
         // resolved when its reference is loaded.
         let mut flags = i32::from(layer.frozen) + 4 * i32::from(layer.locked);

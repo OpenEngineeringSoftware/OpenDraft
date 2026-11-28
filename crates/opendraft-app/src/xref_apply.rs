@@ -6,11 +6,13 @@
 use opendraft_commands::{
     AddLayer, Cancelled, Editor, ModifyAttributes, ModifyEntities, ModifyLayers, RemoveEntities,
     RemoveLayer, SetBlocks, SetLayouts, SetLinetypes, SetTextStyles, SetXrefs, Transaction,
+    Wording,
 };
 use opendraft_core::{
     BindPlan, BindType, BlockId, Entity, Insert, Point, XbindSymbol, XrefDef, XrefPathType,
     XrefPlan,
 };
+use opendraft_ui::key;
 
 /// Put the plan's layers, styles and linetypes into the transaction.
 fn tables(tx: &mut Transaction, plan: &XrefPlan) {
@@ -77,7 +79,9 @@ pub(crate) fn reload(ed: &mut Editor, plan: XrefPlan) -> Result<(), Cancelled> {
     let root = plan.root.clone();
     let redefinition = ed.read(move |doc| doc.redefined_blocks((*root).clone()))?;
     let Ok(redefinition) = redefinition else {
-        ed.say("Could not reload the external reference: its blocks form a loop.");
+        ed.say(key!(
+            "Could not reload the external reference: its blocks form a loop."
+        ));
         return Ok(());
     };
     ed.transaction("Reload external reference", move |tx| {
@@ -106,7 +110,7 @@ pub(crate) fn unload(ed: &mut Editor, block: BlockId) -> Result<(), Cancelled> {
         doc.redefined_blocks(emptied).ok()
     })?;
     let Some(redefinition) = redefinition else {
-        ed.say("That external reference is not in the drawing.");
+        ed.say(key!("That external reference is not in the drawing."));
         return Ok(());
     };
     ed.transaction("Unload external reference", move |tx| {
@@ -165,7 +169,10 @@ pub(crate) fn bind(ed: &mut Editor, blocks: Vec<BlockId>, kind: BindType) -> Res
     match plan {
         Ok(plan) => apply_plan(ed, plan, "Bind external reference"),
         Err(why) => {
-            ed.say(format!("Could not bind the external reference: {why}"));
+            ed.say(
+                Wording::new(key!("Could not bind the external reference: %{why}"), &[])
+                    .part("why", Wording::plain(why.to_string())),
+            );
             Ok(())
         }
     }
@@ -179,14 +186,17 @@ pub(crate) fn xbind(
     kind: BindType,
 ) -> Result<(), Cancelled> {
     if symbols.is_empty() {
-        ed.say("No dependent symbol was chosen.");
+        ed.say(key!("No dependent symbol was chosen."));
         return Ok(());
     }
     let plan = ed.read(move |doc| doc.plan_xbind(&symbols, kind))?;
     match plan {
         Ok(plan) => apply_plan(ed, plan, "Bind dependent symbols"),
         Err(why) => {
-            ed.say(format!("Could not bind the dependent symbols: {why}"));
+            ed.say(
+                Wording::new(key!("Could not bind the dependent symbols: %{why}"), &[])
+                    .part("why", Wording::plain(why.to_string())),
+            );
             Ok(())
         }
     }
@@ -256,8 +266,9 @@ pub(crate) fn edit_path(
 mod tests {
     use std::sync::atomic::AtomicBool;
 
+    use opendraft_core::XrefLoadRequest;
     use opendraft_core::{Document, Entity, LayerId, Point};
-    use opendraft_files::{plan_xref, XrefLimits, XrefPlanRequest};
+    use opendraft_files::{plan_xref, XrefLimits};
 
     use crate::state::AppState;
 
@@ -270,8 +281,8 @@ mod tests {
         }])
     }
 
-    fn request() -> XrefPlanRequest {
-        XrefPlanRequest {
+    fn request() -> XrefLoadRequest {
+        XrefLoadRequest {
             block: None,
             name: "base".to_owned(),
             source_path: "/work/base.dwg".to_owned(),
@@ -282,7 +293,7 @@ mod tests {
         }
     }
 
-    fn planned(host: &Document, request: XrefPlanRequest) -> XrefPlan {
+    fn planned(host: &Document, request: XrefLoadRequest) -> XrefPlan {
         plan_xref(
             host,
             &source(),
@@ -468,5 +479,91 @@ mod tests {
     /// The public `reload` name clashes with the local variable above.
     fn reload_plan(ed: &mut Editor, plan: XrefPlan) -> Result<(), Cancelled> {
         super::reload(ed, plan)
+    }
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use std::sync::atomic::AtomicBool;
+
+    use opendraft_core::{Attributes, Document, Entity, Layer, LayerId, Point, XrefLoadRequest};
+    use opendraft_files::{plan_xref, XrefLimits};
+
+    use crate::state::AppState;
+
+    use super::*;
+
+    /// A drawing with `base` attached; the source has a layer "Walls".
+    fn attached() -> (AppState, BlockId, LayerId) {
+        let mut source = Document::default();
+        let walls = source.allocate_layer_id();
+        source.push_layer(Layer::new(walls, "Walls"));
+        source.add_with(
+            Entity::Line {
+                start: Point::new(0.0, 0.0),
+                end: Point::new(2.0, 0.0),
+            },
+            Attributes::on_layer(walls),
+        );
+        let mut state = AppState::new();
+        let request = XrefLoadRequest {
+            block: None,
+            name: "base".to_owned(),
+            source_path: "/work/base.dwg".to_owned(),
+            path_type: XrefPathType::Full,
+            kind: opendraft_core::XrefKind::Attach,
+            host_dir: None,
+            host_path: None,
+        };
+        let plan = plan_xref(
+            state.session().document(),
+            &source,
+            &request,
+            &XrefLimits::default(),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let root = plan.xref.block;
+        state.start_command("XATTACH", move |ed| {
+            attach(ed, plan, Point::new(0.0, 0.0), (1.0, 1.0), 0.0)
+        });
+        state.settle_command();
+        let layer = state.session().document().xref(root).unwrap().layers[0].layer;
+        (state, root, layer)
+    }
+
+    #[test]
+    fn a_bound_layer_cannot_be_renamed_and_the_drawing_stays_valid() {
+        let (mut state, _root, layer) = attached();
+        let before = state
+            .session()
+            .document()
+            .layer(layer)
+            .unwrap()
+            .name
+            .clone();
+        state.rename_layer(layer, "Renamed");
+        let doc = state.session().document();
+        assert_eq!(doc.layer(layer).unwrap().name, before);
+        assert_eq!(doc.validate(), Ok(()));
+    }
+
+    #[test]
+    fn a_layer_cannot_be_given_a_pipe() {
+        let mut state = AppState::new();
+        let id = state.new_layer();
+        let before = state.session().document().layer(id).unwrap().name.clone();
+        state.rename_layer(id, "base|Walls");
+        assert_eq!(state.session().document().layer(id).unwrap().name, before);
+    }
+
+    #[test]
+    fn the_root_block_cannot_be_renamed_or_re_united() {
+        let (mut state, root, _layer) = attached();
+        assert!(state.rename_block(root, "other").is_err());
+        assert!(state
+            .set_block_unit(root, opendraft_core::InsertUnits::from_code(4).unwrap())
+            .is_err());
+        assert_eq!(state.session().document().validate(), Ok(()));
     }
 }

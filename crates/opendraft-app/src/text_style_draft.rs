@@ -51,6 +51,8 @@ impl Draft {
             Some(key!("Type a name.").to_owned())
         } else if name.len() > MAX_NAME_BYTES {
             Some(key!("That name is too long.").to_owned())
+        } else if name.contains('|') {
+            Some(key!("A name cannot contain |.").to_owned())
         } else if self
             .styles
             .iter()

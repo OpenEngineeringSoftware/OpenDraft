@@ -53,6 +53,9 @@ fn apply_props(document: &Document, layer: &mut Layer, props: &LayerProps) -> Re
             return Err(invalid("Layer 0 cannot be renamed."));
         }
         if *name != layer.name {
+            if let Some(problem) = document.layer_rename_problem(layer.id, name) {
+                return Err(invalid(problem));
+            }
             layer.name = check_name(document, name, Some(layer.id))?;
         }
     }

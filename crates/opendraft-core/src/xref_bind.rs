@@ -66,6 +66,9 @@ pub enum BindError {
     NotAnXref(BlockId),
     /// A symbol XBIND was asked for does not belong to the reference.
     NotDependent { xref: BlockId, what: String },
+    /// The reference has no content to bind: it is unloaded, or came from a
+    /// file that kept only the reference.
+    Unloaded(String),
     /// The snapshot holds something a host block cannot: a hatch, a
     /// construction line or a ray.
     UnsupportedContent {
@@ -85,6 +88,10 @@ impl std::fmt::Display for BindError {
             Self::NotDependent { xref, what } => {
                 write!(f, "\"{what}\" is not dependent on block {}", xref.0)
             }
+            Self::Unloaded(reference) => write!(
+                f,
+                "external reference \"{reference}\" is not loaded; reload it before binding"
+            ),
             Self::UnsupportedContent { reference, what } => write!(
                 f,
                 "external reference \"{reference}\" holds a {what}, which a host block cannot; \

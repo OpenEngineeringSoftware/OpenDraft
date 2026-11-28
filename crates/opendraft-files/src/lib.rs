@@ -34,7 +34,7 @@ pub use template::{
 };
 pub use xref::{
     classify, format_saved_path, plan_xref, read_source, resolve, stamp, XrefLimits, XrefLoadError,
-    XrefPathError, XrefPlanError, XrefPlanRequest, XrefSource,
+    XrefPathError, XrefPlanError, XrefSource,
 };
 
 /// "1 object", "2 objects": a count and a noun for a warning.

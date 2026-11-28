@@ -31,6 +31,21 @@ impl Document {
         self.current_layer
     }
 
+    /// Why layer `id` cannot take `name`, when it cannot. An external
+    /// reference's bound layer is named after the reference and its source
+    /// layer, and `|` belongs to those names alone.
+    pub fn layer_rename_problem(&self, id: LayerId, name: &str) -> Option<&'static str> {
+        if self.xref_layer_owner(id).is_some() {
+            Some(crate::key!(
+                "An external reference layer cannot be renamed; detach the reference."
+            ))
+        } else if name.contains('|') {
+            Some(crate::key!("A layer name cannot contain |."))
+        } else {
+            None
+        }
+    }
+
     /// Make `id` the layer new objects go on. Ignores unknown ids and an
     /// external reference's bound layer, as AutoCAD does. Returns whether it
     /// became the current layer.

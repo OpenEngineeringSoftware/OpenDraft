@@ -279,3 +279,13 @@ fn an_infinite_line_in_the_snapshot_refuses_binding() {
         }
     ));
 }
+
+#[test]
+fn an_unloaded_reference_refuses_binding_instead_of_binding_nothing() {
+    let (mut doc, root, _chair, _walls) = host();
+    let mut records = doc.xrefs().to_vec();
+    records[0].unloaded = true;
+    doc.set_xrefs(records);
+    let error = doc.plan_bind(&[root], BindType::Bind).unwrap_err();
+    assert!(matches!(error, BindError::Unloaded(_)), "{error}");
+}

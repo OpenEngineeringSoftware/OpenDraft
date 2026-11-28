@@ -145,6 +145,13 @@ pub struct XrefDef {
 }
 
 impl XrefDef {
+    /// Nothing was ever read for this record: it came from a DXF or DWG
+    /// file, which keep the reference and not its snapshot. A reference the
+    /// user unloaded keeps the stamp of the file it last read.
+    pub fn never_loaded(&self) -> bool {
+        self.unloaded && self.stamp.is_none()
+    }
+
     pub fn owns_block(&self, id: BlockId) -> bool {
         self.blocks.iter().any(|b| b.id == id)
     }
@@ -271,6 +278,9 @@ pub struct XrefLoadRequest {
     pub kind: XrefKind,
     /// The host drawing's folder, for relative paths.
     pub host_dir: Option<String>,
+    /// The host drawing's own file, to refuse attaching itself. The app
+    /// fills it in; a command leaves it `None`.
+    pub host_path: Option<String>,
 }
 
 /// The Attach External Reference dialog's fields.
@@ -298,9 +308,7 @@ impl XrefAttachDraft {
             return Some(why.to_owned());
         }
         if doc.block_named(name).is_some() || doc.xref_by_name(name).is_some() {
-            return Some(format!(
-                "a block or external reference called \"{name}\" already exists"
-            ));
+            return Some(XrefProblem::NameTaken(name.to_owned()).to_string());
         }
         if let Some(why) = path_problem(&self.source_path) {
             return Some(why.to_string());

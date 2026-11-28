@@ -9,7 +9,8 @@ use std::sync::Arc;
 use opendraft_core::block::block_name_problem;
 use opendraft_core::{
     BlockDef, BlockId, Document, InsertUnits, Layer, LayerId, LinetypeId, LinetypeTable, TextStyle,
-    TextStyleId, TextStylePlan, XrefDef, XrefKind, XrefLayer, XrefPathType, XrefPlan, XrefReport,
+    TextStyleId, TextStylePlan, XrefDef, XrefKind, XrefLayer, XrefLoadRequest, XrefPlan,
+    XrefReport,
 };
 
 use super::error::XrefPlanError;
@@ -19,28 +20,12 @@ use super::source::XrefLimits;
 mod blocks;
 mod mapping;
 
-/// What the app asks the planner for.
-#[derive(Clone, Debug, PartialEq)]
-pub struct XrefPlanRequest {
-    /// The existing root on reload; `None` for a new attach.
-    pub block: Option<BlockId>,
-    pub name: String,
-    /// The source as chosen: absolute, or resolvable against `host_dir`.
-    pub source_path: String,
-    pub path_type: XrefPathType,
-    pub kind: XrefKind,
-    /// The host drawing's folder, for relative paths.
-    pub host_dir: Option<String>,
-    /// The host drawing's own file, to refuse attaching itself.
-    pub host_path: Option<String>,
-}
-
 /// Plan a reference of `source` in `host`. Nothing is changed in either
 /// drawing; the caller applies the plan through commands.
 pub fn plan_xref(
     host: &Document,
     source: &Document,
-    request: &XrefPlanRequest,
+    request: &XrefLoadRequest,
     limits: &XrefLimits,
     cancelled: &AtomicBool,
 ) -> Result<XrefPlan, XrefPlanError> {
@@ -297,7 +282,7 @@ mod tests {
 
     use opendraft_core::{
         Attributes, BlockDef, BlockEntity, BlockId, BlockObjectId, Color, Entity, Insert, Layer,
-        MText, Point, TextStyle, XrefLayer, XrefProblem, XrefReport, XrefStamp,
+        MText, Point, TextStyle, XrefLayer, XrefPathType, XrefProblem, XrefReport, XrefStamp,
     };
 
     use super::*;
@@ -356,9 +341,9 @@ mod tests {
         source
     }
 
-    fn request(name: &str) -> XrefPlanRequest {
+    fn request(name: &str) -> XrefLoadRequest {
         let (source_path, host_dir, _) = paths();
-        XrefPlanRequest {
+        XrefLoadRequest {
             block: None,
             name: name.to_owned(),
             source_path: source_path.to_owned(),
@@ -369,7 +354,7 @@ mod tests {
         }
     }
 
-    fn plan(host: &Document, source: &Document, request: &XrefPlanRequest) -> XrefPlan {
+    fn plan(host: &Document, source: &Document, request: &XrefLoadRequest) -> XrefPlan {
         plan_xref(
             host,
             source,
