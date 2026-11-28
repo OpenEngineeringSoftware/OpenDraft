@@ -21,7 +21,7 @@ impl OpenDraftApp {
     /// The dialogs and managers that open over the drawing, each of which
     /// shows itself only while its flag is set.
     pub(super) fn tool_windows(&mut self, ctx: &egui::Context) {
-        widgets::set_dialogs_in_windows(self.state.settings.dialogs_in_windows);
+        widgets::set_dialogs_in_windows(ctx, self.state.settings.popout_windows);
         self.settings_window(ctx);
         self.units_window(ctx);
         self.properties_window(ctx);
@@ -80,12 +80,18 @@ impl OpenDraftApp {
             .map(|c| (c.write, c.commands, c.files))
             .collect();
         let mut request = None;
-        let screen = ctx.screen_rect();
+        // As a window of its own the dialog is as big as the monitor allows,
+        // not the main window; inside the main window, as that allows.
+        let room = match self.state.settings.popout_windows {
+            true => ctx.input(|i| i.viewport().monitor_size),
+            false => None,
+        }
+        .unwrap_or_else(|| ctx.screen_rect().size());
         // Fixed, so the dialog does not change size between tabs: tall enough
         // for Display and Drafting, the longest pages, and smaller on short
         // screens.
-        let page_height = (screen.height() - 230.0).clamp(100.0, 430.0);
-        let width = (screen.width() - 80.0).clamp(360.0, 880.0);
+        let page_height = (room.y - 230.0).clamp(100.0, 500.0);
+        let width = (room.x - 80.0).clamp(360.0, 880.0);
 
         widgets::dialog(ctx, &self.theme, "Settings", &mut open, width, |ui| {
             ui.horizontal(|ui| {

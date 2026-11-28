@@ -85,7 +85,7 @@ pub fn offer_detached(
     released: bool,
 ) -> bool {
     // The panel's own size matters only for how much of the drawing it takes.
-    let size = Vec2::new(300.0, 260.0);
+    let size = Vec2::from(crate::detached::OPENS_AT_LEAST);
     let found = targets::targets(dock, panel, size, at);
     let drop = targets::drop_at(dock, &found, at);
     if !released {

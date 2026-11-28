@@ -23,6 +23,8 @@ fn toggle(app: &mut OpenDraftApp, panel: PanelTab) {
 #[test]
 fn a_floating_panel_reopens_where_it_floated_at_its_size() {
     let (mut app, ctx, mut time) = (app(), egui::Context::default(), 0.0);
+    // Floating inside the main window is the setting's other state.
+    app.state.settings.popout_windows = false;
     frames(&mut app, &ctx, &mut time);
     let found = app.dock.find_tab(&PanelTab::Layers).unwrap();
     let asked = Rect::from_min_size(Pos2::new(420.0, 180.0), Vec2::new(300.0, 380.0));

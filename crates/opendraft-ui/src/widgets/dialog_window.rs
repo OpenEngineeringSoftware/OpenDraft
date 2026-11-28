@@ -1,22 +1,59 @@
 //! A dialog shown as a real OS window instead of a window inside the main one.
-//! Off unless the user turns it on (Settings, Display); `containers::dialog`
-//! chooses between the two.
-
-use std::sync::atomic::{AtomicBool, Ordering};
+//! The user chooses it in Settings, Display; `containers::dialog` chooses
+//! between the two. Without a choice made on the context, a dialog is a window
+//! inside the main one.
 
 use egui::{Margin, Ui};
 
 use crate::Theme;
 
-static IN_WINDOWS: AtomicBool = AtomicBool::new(false);
-
-/// Choose where dialogs open: `true` is their own OS windows.
-pub fn set_dialogs_in_windows(on: bool) {
-    IN_WINDOWS.store(on, Ordering::Relaxed);
+fn mode_id() -> egui::Id {
+    egui::Id::new("dialogs_in_windows")
 }
 
-pub(super) fn viewport_mode() -> bool {
-    IN_WINDOWS.load(Ordering::Relaxed)
+/// Choose where dialogs open, for what `ctx` shows: `true` is their own OS
+/// windows. Kept on the context, so two contexts (two tests) do not share it.
+pub fn set_dialogs_in_windows(ctx: &egui::Context, on: bool) {
+    ctx.data_mut(|d| d.insert_temp(mode_id(), on));
+}
+
+/// Keep the window `ctx` is drawing above the main window while this program
+/// is the active one, and an ordinary window when another program is (so it
+/// does not cover that program). `key` is the window's own, to remember which
+/// it is in.
+pub fn keep_above_main(ctx: &egui::Context, key: egui::Id) {
+    let mine = ctx.input(|i| i.viewport().focused).unwrap_or(false);
+    let root = ctx
+        .input_for(egui::ViewportId::ROOT, |i| i.viewport().focused)
+        .unwrap_or(false);
+    let top = mine || root;
+    if ctx.data(|d| d.get_temp::<bool>(key)) != Some(top) {
+        ctx.data_mut(|d| d.insert_temp(key, top));
+        ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(if top {
+            egui::WindowLevel::AlwaysOnTop
+        } else {
+            egui::WindowLevel::Normal
+        }));
+    }
+}
+
+fn epoch_id() -> egui::Id {
+    egui::Id::new("dialog_positions_epoch")
+}
+
+fn epoch(ctx: &egui::Context) -> u64 {
+    ctx.data(|d| d.get_temp::<u64>(epoch_id())).unwrap_or(0)
+}
+
+/// Forget where dialog windows were left, so the next one opens in the middle
+/// of the main window: for a dialog left on a monitor that has gone.
+pub fn bring_dialogs_back(ctx: &egui::Context) {
+    let next = epoch(ctx) + 1;
+    ctx.data_mut(|d| d.insert_temp(epoch_id(), next));
+}
+
+pub(super) fn viewport_mode(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(mode_id())).unwrap_or(false)
 }
 
 /// The dialog as its own OS window (an immediate viewport): the same body,
@@ -42,11 +79,15 @@ pub(super) fn dialog_window<R>(
     let last_pos_id = egui::Id::new(("dialog_vp_last_pos", title));
     let start_id = egui::Id::new(("dialog_vp_start", title));
     let centred_id = egui::Id::new(("dialog_vp_centred", title));
+    let epoch_now = epoch(ctx);
     let seen = ctx.data(|d| d.get_temp::<u64>(seen_id));
     ctx.data_mut(|d| d.insert_temp(seen_id, pass));
     let fresh = !matches!(seen, Some(s) if s + 1 >= pass);
     if fresh {
-        let remembered = ctx.data(|d| d.get_temp::<egui::Pos2>(last_pos_id));
+        let remembered = ctx
+            .data(|d| d.get_temp::<(egui::Pos2, u64)>(last_pos_id))
+            .filter(|(_, e)| *e == epoch_now)
+            .map(|(p, _)| p);
         let main = ctx.input(|i| i.viewport().outer_rect);
         let start = remembered.or(main.map(|m| m.center() - size / 2.0));
         ctx.data_mut(|d| d.insert_temp(centred_id, remembered.is_none()));
@@ -70,24 +111,9 @@ pub(super) fn dialog_window<R>(
     let mut result = None;
     let mut used = None;
     ctx.show_viewport_immediate(id, builder, |ctx, _class| {
-        // Above the main window while the app is the active program; an
-        // ordinary window when another program is (so it does not cover it).
-        let mine = ctx.input(|i| i.viewport().focused).unwrap_or(false);
-        let root = ctx
-            .input_for(egui::ViewportId::ROOT, |i| i.viewport().focused)
-            .unwrap_or(false);
-        let top = mine || root;
-        let level_id = egui::Id::new(("dialog_vp_top", title));
-        if ctx.data(|d| d.get_temp::<bool>(level_id)) != Some(top) {
-            ctx.data_mut(|d| d.insert_temp(level_id, top));
-            ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(if top {
-                egui::WindowLevel::AlwaysOnTop
-            } else {
-                egui::WindowLevel::Normal
-            }));
-        }
+        keep_above_main(ctx, egui::Id::new(("dialog_vp_top", title)));
         if let Some(outer) = ctx.input(|i| i.viewport().outer_rect) {
-            ctx.data_mut(|d| d.insert_temp(last_pos_id, outer.min));
+            ctx.data_mut(|d| d.insert_temp(last_pos_id, (outer.min, epoch_now)));
         }
         egui::CentralPanel::default()
             .frame(

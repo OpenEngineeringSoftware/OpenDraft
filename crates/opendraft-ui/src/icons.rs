@@ -284,6 +284,10 @@ icons! {
     OSNAP_PERPENDICULAR = '\u{e0ec}';
     OSNAP_QUADRANT = '\u{e0ec}';
     OSNAP_TANGENT = '\u{e0ec}';
+    /// Dock a panel that is in a window of its own back into the main window.
+    PANEL_DOCK = '\u{e5d7}';
+    /// Close the window of a panel that is in a window of its own.
+    PANEL_WINDOW_CLOSE = '\u{e1b1}';
     PANEL_SECTION_CLOSED = '\u{e073}';
     PANEL_SECTION_OPEN = '\u{e071}';
     POWER_SELECT_PICK = '\u{e1c2}';
@@ -328,6 +332,7 @@ icons! {
     VIEW_PAN = '\u{e1d6}';
     VIEW_PANEL_PROPERTIES = '\u{e37a}';
     VIEW_RESET_LAYOUT = '\u{e2a0}';
+    VIEW_BRING_WINDOWS_BACK = '\u{e42a}';
     VIEW_NAV_GIZMO = '\u{e09f}';
     VIEW_SNAP = '\u{e2b4}';
     VIEW_ZOOM_EXTENTS = '\u{e115}';
