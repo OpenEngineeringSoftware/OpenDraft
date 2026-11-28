@@ -2,15 +2,17 @@
 //! external reference's path. The file work is asked for through
 //! `Editor::ask_xref_plan`; the edits are `xref_apply`.
 //!
-//! `XREF`'s palette is the next step; until then the command-line form is the
-//! way in, and `XATTACH` asks the same questions as `-XREF Attach`.
+//! `XATTACH` opens the Attach External Reference dialog; `-XREF` is the
+//! command-line form, and the palette uses the same pieces.
 
 use std::path::Path;
 
 use opendraft_commands::{
     Cancelled, Command, Editor, NumberOptions, Options, PointOptions, Wording, XrefHostDir,
 };
-use opendraft_core::{path_problem, BlockId, XrefKind, XrefLoadRequest, XrefPathType};
+use opendraft_core::{
+    path_problem, BlockId, XrefAttachDraft, XrefKind, XrefLoadRequest, XrefPathType,
+};
 use opendraft_ui::key;
 
 use crate::state::AppState;
@@ -25,7 +27,7 @@ pub fn commands() -> Vec<Command<AppState>> {
         .checked(|s| s.is_running("-XREF"))
         .transparent(),
         Command::new("xref.attach", "XATTACH", |s: &mut AppState| {
-            s.start_command("XATTACH", |ed| attach(ed, XrefKind::Attach, true))
+            s.start_command("XATTACH", attach_dialog)
         })
         .checked(|s| s.is_running("XATTACH"))
         .transparent(),
@@ -62,8 +64,8 @@ fn command_line(ed: &mut Editor) -> Result<(), Cancelled> {
         "Path" => edit_path(ed),
         "Unload" => unload(ed),
         "Reload" => reload(ed),
-        "Overlay" => attach(ed, XrefKind::Overlay, false),
-        _ => attach(ed, XrefKind::Attach, false),
+        "Overlay" => attach(ed, XrefKind::Overlay),
+        _ => attach(ed, XrefKind::Attach),
     }
 }
 
@@ -130,46 +132,107 @@ fn host_dir(ed: &Editor) -> Option<String> {
         .and_then(|dir| dir.0.clone())
 }
 
-pub(crate) fn attach(ed: &mut Editor, kind: XrefKind, ask_type: bool) -> Result<(), Cancelled> {
+/// The `XREFTYPE` and `REFPATHTYPE` defaults, read when a command starts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct XrefDefaults {
+    pub overlay: bool,
+    pub path_type: XrefPathType,
+}
+
+impl Default for XrefDefaults {
+    fn default() -> Self {
+        Self {
+            overlay: false,
+            path_type: XrefPathType::Relative,
+        }
+    }
+}
+
+fn defaults_of(ed: &Editor) -> XrefDefaults {
+    ed.context()
+        .get::<XrefDefaults>()
+        .map(|defaults| *defaults)
+        .unwrap_or_default()
+}
+
+/// The name a source file suggests for its reference: the stem, or "xref".
+fn stem_of(path: &str) -> String {
+    Path::new(path)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "xref".to_owned())
+}
+
+/// `XATTACH`: the source file is named, then the Attach External Reference
+/// dialog fills in the rest. Anything left "on-screen" is asked in the
+/// drawing once the dialog closes.
+pub(crate) fn attach_dialog(ed: &mut Editor) -> Result<(), Cancelled> {
     let dir = host_dir(ed);
-    let (kind, path_type) = if ask_type {
-        let kind = match ed
-            .get_keyword(
-                Options::<String>::new(key!("Enter reference type [Attach/Overlay] <Attach>"))
-                    .keyword("Attach", "A")
-                    .keyword("Overlay", "O")
-                    .default("Attach".to_owned()),
-            )?
-            .to_ascii_lowercase()
-        {
-            typed if typed.starts_with('o') => XrefKind::Overlay,
-            _ => XrefKind::Attach,
-        };
-        let path_type = match ed
-            .get_keyword(
-                Options::<String>::new(key!("Enter path type [Full/Relative/NoPath] <Relative>"))
-                    .keyword("Full", "F")
-                    .keyword("Relative", "R")
-                    .keyword("NoPath", "N")
-                    .default("Relative".to_owned()),
-            )?
-            .to_ascii_lowercase()
-        {
-            typed if typed.starts_with('f') => XrefPathType::Full,
-            typed if typed.starts_with('n') => XrefPathType::NoPath,
-            _ => XrefPathType::Relative,
-        };
-        (kind, path_type)
-    } else {
-        (kind, XrefPathType::Relative)
-    };
+    let defaults = defaults_of(ed);
     let source_path = ed.get_string(Options::<String>::new(key!(
         "Enter name of file to attach:"
     )))?;
-    let stem = Path::new(&source_path)
-        .file_stem()
-        .map(|stem| stem.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "xref".to_owned());
+    if let Some(problem) = path_problem(&source_path) {
+        ed.say(problem.to_string());
+        return Ok(());
+    }
+    let draft = XrefAttachDraft {
+        name: stem_of(&source_path),
+        source_path,
+        kind: if defaults.overlay {
+            XrefKind::Overlay
+        } else {
+            XrefKind::Attach
+        },
+        path_type: defaults.path_type,
+        insertion: None,
+        scale: None,
+        rotation: None,
+    };
+    let draft = ed.ask_xref_attach(draft)?;
+    let at = match draft.insertion {
+        Some(at) => at,
+        None => ed.get_point(PointOptions::new(key!("Specify insertion point:")))?,
+    };
+    let scale = match draft.scale {
+        Some(scale) => scale,
+        None => {
+            let factor =
+                ed.get_number(NumberOptions::new(key!("Specify scale factor <1>:")).default(1.0))?;
+            (factor, factor)
+        }
+    };
+    if !scale.0.is_finite() || !scale.1.is_finite() || scale.0 == 0.0 || scale.1 == 0.0 {
+        ed.say(key!("The scale factor cannot be zero."));
+        return Ok(());
+    }
+    let rotation = match draft.rotation {
+        Some(angle) => angle,
+        None => {
+            ed.get_angle(NumberOptions::new(key!("Specify rotation angle <0>:")).default(0.0))?
+        }
+    };
+    let request = XrefLoadRequest {
+        block: None,
+        name: draft.name.trim().to_owned(),
+        source_path: draft.source_path,
+        path_type: draft.path_type,
+        kind: draft.kind,
+        host_dir: dir,
+    };
+    plan_and_attach(ed, request, at, scale, rotation)
+}
+
+/// The command-line `-XREF Attach`/`Overlay`: it uses the remembered path
+/// type, and asks the same insertion, scale and rotation questions the
+/// dialog fills.
+pub(crate) fn attach(ed: &mut Editor, kind: XrefKind) -> Result<(), Cancelled> {
+    let dir = host_dir(ed);
+    let path_type = defaults_of(ed).path_type;
+    let source_path = ed.get_string(Options::<String>::new(key!(
+        "Enter name of file to attach:"
+    )))?;
+    let stem = stem_of(&source_path);
     let name = ed.get_string(Options::<String>::new(key!("Enter reference name")).default(stem))?;
     let at = ed.get_point(PointOptions::new(key!("Specify insertion point:")))?;
     let scale =
@@ -188,11 +251,23 @@ pub(crate) fn attach(ed: &mut Editor, kind: XrefKind, ask_type: bool) -> Result<
         kind,
         host_dir: dir,
     };
+    plan_and_attach(ed, request, at, (scale, scale), rotation)
+}
+
+/// Read and plan the source, then add it; the wording of both outcomes is
+/// the same for the dialog and the command line.
+fn plan_and_attach(
+    ed: &mut Editor,
+    request: XrefLoadRequest,
+    at: opendraft_core::Point,
+    scale: (f64, f64),
+    rotation: f64,
+) -> Result<(), Cancelled> {
     match ed.ask_xref_plan(request)? {
         Ok(plan) => {
             let label = plan.root.name.clone();
             let count = plan.root.entities.len();
-            xref_apply::attach(ed, plan, at, (scale, scale), rotation)?;
+            xref_apply::attach(ed, plan, at, scale, rotation)?;
             ed.say(
                 Wording::new(
                     key!("Attached external reference \"%{name}\" (%{objects})"),
@@ -357,6 +432,17 @@ fn ask_path(ed: &mut Editor) -> Result<Option<(String, XrefPathType)>, Cancelled
     Ok(Some((path, path_type)))
 }
 
+impl AppState {
+    /// The reference type and path type a new reference starts from, read
+    /// when a command starts (`XREFTYPE`, `REFPATHTYPE`).
+    pub(crate) fn xref_defaults(&self) -> XrefDefaults {
+        XrefDefaults {
+            overlay: self.settings.xref_overlay,
+            path_type: self.settings.ref_path_type.to_core(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,8 +477,8 @@ mod tests {
     }
 
     #[test]
-    fn attach_through_the_prompts_reads_a_real_source_and_adds_it() {
-        use opendraft_commands::Wants;
+    fn attach_through_the_dialog_reads_a_real_source_and_adds_it() {
+        use opendraft_commands::{Reply, Wants};
         use opendraft_core::{Document, Entity, Point};
         use opendraft_files::{FileFormat, NativeFormat};
 
@@ -405,11 +491,17 @@ mod tests {
         std::fs::write(&path, NativeFormat.write(&source).unwrap().bytes).unwrap();
 
         let mut state = AppState::new();
-        state.start_command("XATTACH", |ed| attach(ed, XrefKind::Attach, false));
+        state.start_command("XATTACH", attach_dialog);
         state.settle_command();
         state.cmd_submit(&path.to_string_lossy());
         state.settle_command();
-        state.answer_enter();
+        let draft = state
+            .waiting()
+            .and_then(|ask| ask.xref_attach.clone())
+            .expect("the Attach External Reference dialog");
+        assert_eq!(draft.kind, XrefKind::Attach);
+        assert_eq!(draft.path_type, XrefPathType::Relative);
+        state.reply(Reply::XrefAttach(draft));
         state.settle_command();
         state.answer_point(Point::new(3.0, 4.0));
         state.settle_command();
@@ -429,6 +521,50 @@ mod tests {
         };
         assert!(insert.is_xref);
         assert_eq!(insert.insertion, Point::new(3.0, 4.0));
+        assert_eq!(doc.validate(), Ok(()));
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn the_dialog_values_skip_the_insertion_scale_and_rotation_prompts() {
+        use opendraft_commands::{Reply, Wants};
+        use opendraft_core::{Document, Entity, Point};
+        use opendraft_files::{FileFormat, NativeFormat};
+
+        let source = Document::from_entities([Entity::Line {
+            start: Point::new(0.0, 0.0),
+            end: Point::new(1.0, 0.0),
+        }]);
+        let path =
+            std::env::temp_dir().join(format!("od-xref-dialog-{}.odraft", std::process::id()));
+        std::fs::write(&path, NativeFormat.write(&source).unwrap().bytes).unwrap();
+
+        let mut state = AppState::new();
+        state.start_command("XATTACH", attach_dialog);
+        state.settle_command();
+        state.cmd_submit(&path.to_string_lossy());
+        state.settle_command();
+        let mut draft = state
+            .waiting()
+            .and_then(|ask| ask.xref_attach.clone())
+            .expect("the Attach External Reference dialog");
+        draft.insertion = Some(Point::new(5.0, 6.0));
+        draft.scale = Some((2.0, 2.0));
+        draft.rotation = Some(std::f64::consts::FRAC_PI_2);
+        state.reply(Reply::XrefAttach(draft));
+        state.settle_command();
+        assert_eq!(state.waiting().map(|ask| ask.wants), Some(Wants::XrefLoad));
+        state.sync_xref_load();
+        state.settle_command();
+
+        let doc = state.session().document();
+        let Entity::Insert(insert) = &doc.objects()[0].entity else {
+            panic!("an insert was expected")
+        };
+        assert_eq!(insert.insertion, Point::new(5.0, 6.0));
+        assert_eq!((insert.scale_x, insert.scale_y), (2.0, 2.0));
+        assert_eq!(insert.rotation, std::f64::consts::FRAC_PI_2);
         assert_eq!(doc.validate(), Ok(()));
 
         let _ = std::fs::remove_file(path);

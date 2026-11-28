@@ -298,6 +298,26 @@ fn build() -> Vec<SysVar<AppState>> {
                 Ok(())
             },
         ),
+        SysVar::int(
+            "XREFTYPE",
+            "Default reference type for a new external reference: 0 attach, 1 overlay",
+            (0, 1),
+            |s| flag(s.settings.xref_overlay),
+            |s, v| {
+                s.settings.xref_overlay = int(v) == 1;
+                Ok(())
+            },
+        ),
+        SysVar::int(
+            "REFPATHTYPE",
+            "Default saved path for a new external reference: 0 no path, 1 relative, 2 full",
+            (0, 2),
+            |s| Value::Int(s.settings.ref_path_type.code()),
+            |s, v| {
+                s.settings.ref_path_type = crate::settings::RefPathDefault::from_code(int(v));
+                Ok(())
+            },
+        ),
     ]
 }
 
@@ -337,6 +357,25 @@ mod tests {
         assert!(!state.settings.snap.enabled && state.settings.snap.endpoint);
         table.set("SNAPMODE", "0", &mut state).unwrap();
         assert!(!state.settings.snap.grid);
+    }
+
+    #[test]
+    fn the_xref_defaults_are_variables() {
+        let (table, mut state) = (table(), AppState::new());
+        assert_eq!(table.get("XREFTYPE", &state), Ok(Value::Int(0)));
+        assert_eq!(table.get("REFPATHTYPE", &state), Ok(Value::Int(1)));
+        table.set("XREFTYPE", "1", &mut state).unwrap();
+        assert!(state.settings.xref_overlay);
+        table.set("REFPATHTYPE", "2", &mut state).unwrap();
+        assert_eq!(
+            state.settings.ref_path_type,
+            crate::settings::RefPathDefault::Full
+        );
+        assert!(table.set("REFPATHTYPE", "3", &mut state).is_err());
+        assert_eq!(
+            state.settings.ref_path_type,
+            crate::settings::RefPathDefault::Full
+        );
     }
 
     #[test]

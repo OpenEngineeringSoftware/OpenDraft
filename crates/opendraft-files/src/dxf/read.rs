@@ -15,6 +15,7 @@ use opendraft_core::aci::aci_rgb;
 mod attribute;
 mod basic;
 mod blocks;
+mod clips;
 mod dimension;
 pub(super) mod dynamic;
 mod ellipse;
@@ -166,6 +167,8 @@ struct Importer {
     dim_styles: dimension::Styles,
     /// Coordinate systems left out as 3D or mirrored.
     tilted_ccs: usize,
+    /// `SPATIAL_FILTER` objects (XCLIP boundaries), which are not preserved.
+    clipped: usize,
 }
 
 impl Importer {
@@ -317,6 +320,7 @@ impl Importer {
         if self.damaged > 0 {
             warnings.push(format!("Skipped {} damaged objects.", self.damaged));
         }
+        warnings.extend(clips::warning(self.clipped));
         warnings.extend(self.blocks.warnings());
         warnings.extend(super::ccs::warning(self.tilted_ccs));
         warnings
@@ -402,6 +406,7 @@ pub fn read(bytes: &[u8]) -> Result<Loaded, FileError> {
             "LAYER" | "LTYPE" | "BLOCK_RECORD" | "UCS" => {
                 importer.table_record(record, &section, &table);
             }
+            "SPATIAL_FILTER" if section == "OBJECTS" => importer.clipped += 1,
             _ if section != "ENTITIES"
                 && !(section == "BLOCKS" && spaces.is_sheet_block(&block)) => {}
             "VERTEX" | "SEQEND" => importer.shape(record, &mut open_polyline),
@@ -976,5 +981,39 @@ mod tests {
             .layers()
             .iter()
             .any(|l| l.name == "Caf\u{e9}"));
+    }
+
+    #[test]
+    fn a_clip_boundary_is_reported_as_imported_unclipped() {
+        let bytes = dxf(&[
+            (0, "SECTION"),
+            (2, "ENTITIES"),
+            (0, "ENDSEC"),
+            (0, "SECTION"),
+            (2, "OBJECTS"),
+            (0, "SPATIAL_FILTER"),
+            (5, "2F"),
+            (70, "2"),
+            (10, "0"),
+            (20, "0"),
+            (10, "4"),
+            (20, "0"),
+            (10, "4"),
+            (20, "3"),
+            (10, "0"),
+            (20, "3"),
+            (0, "ENDSEC"),
+            (0, "EOF"),
+        ]);
+        let loaded = read(&bytes).unwrap();
+        assert!(loaded.document.objects().is_empty());
+        assert!(
+            loaded
+                .warnings
+                .iter()
+                .any(|w| w.contains("clip boundary") && w.contains("unclipped")),
+            "{:?}",
+            loaded.warnings
+        );
     }
 }

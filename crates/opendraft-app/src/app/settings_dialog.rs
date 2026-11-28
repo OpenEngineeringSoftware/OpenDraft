@@ -31,6 +31,7 @@ impl OpenDraftApp {
         self.attribute_editor_window(ctx);
         self.block_dialog_window(ctx);
         self.field_dialog_window(ctx);
+        self.xref_attach_window(ctx);
         self.purge_window(ctx);
         self.linetype_window(ctx);
         self.text_style_window(ctx);

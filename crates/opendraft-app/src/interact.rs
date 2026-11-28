@@ -47,7 +47,8 @@ impl AppState {
             .with(Arc::new(self.field_context()))
             .with(Arc::new(opendraft_commands::XrefHostDir(
                 self.xref_host_dir(),
-            )));
+            )))
+            .with(Arc::new(self.xref_defaults()));
         self.runner = Some(Runner::start_with(name, pickset, context, command));
         self.run_doc = self.active;
         self.pump_command();

@@ -46,14 +46,14 @@ mod text_style_dialog;
 mod text_style_preview;
 mod units_dialog;
 mod update_notice;
+mod xref_attach_dialog;
 
 use eframe::egui;
 use egui_dock::DockState;
 use opendraft_commands::Registry;
-use opendraft_ui::icons;
 use opendraft_ui::ribbon::{CommandSource, Ribbon, RibbonState};
 use opendraft_ui::shortcuts::{consume_shortcut, modifier_count, parse_shortcut};
-use opendraft_ui::Theme;
+use opendraft_ui::{icons, Theme};
 
 use crate::dock::{self, PanelTab};
 use crate::locations::Location;
