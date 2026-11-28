@@ -21,6 +21,7 @@ impl OpenDraftApp {
     /// The dialogs and managers that open over the drawing, each of which
     /// shows itself only while its flag is set.
     pub(super) fn tool_windows(&mut self, ctx: &egui::Context) {
+        widgets::set_dialogs_in_windows(self.state.settings.dialogs_in_windows);
         self.settings_window(ctx);
         self.units_window(ctx);
         self.properties_window(ctx);

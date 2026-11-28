@@ -118,6 +118,10 @@ fn display_right(ui: &mut egui::Ui, theme: &Theme, draft: &mut Settings) {
         });
         ui.checkbox(&mut draft.show_nav_gizmo, "Show the navigation gizmo");
         ui.checkbox(
+            &mut draft.dialogs_in_windows,
+            "Open dialogs in their own windows (can be moved to another monitor)",
+        );
+        ui.checkbox(
             &mut draft.show_viewport_controls,
             "Display the viewport controls",
         )

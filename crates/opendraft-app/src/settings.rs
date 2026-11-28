@@ -48,6 +48,9 @@ pub struct Settings {
     pub show_grid: bool,
     /// The navigation gizmo in the top right corner of the drawing.
     pub show_nav_gizmo: bool,
+    /// Dialogs open as their own operating system windows, which can be
+    /// moved to another monitor, instead of inside the main window.
+    pub dialogs_in_windows: bool,
     /// The `[-][Top][2D Wireframe]` label in the drawing's top-left corner
     /// (`VPCONTROL`).
     pub show_viewport_controls: bool,
@@ -120,6 +123,7 @@ impl Default for Settings {
             layout_paper_colour: Default::default(),
             show_grid: true,
             show_nav_gizmo: true,
+            dialogs_in_windows: false,
             show_viewport_controls: true,
             grid_spacing: 10.0,
             ui_scale_percent: 100,
@@ -374,6 +378,7 @@ mod tests {
             layout_paper_colour: crate::paper_colour::PaperColour::Cream,
             show_grid: false,
             show_nav_gizmo: false,
+            dialogs_in_windows: true,
             show_viewport_controls: false,
             grid_spacing: 2.5,
             ui_scale_percent: 125,
