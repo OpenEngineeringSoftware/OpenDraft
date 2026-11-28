@@ -12,14 +12,19 @@ use crate::dock::PanelTab;
 /// The window while it is carried: just its header.
 const CARRIED: Vec2 = Vec2::new(200.0, 28.0);
 
-/// Where the pointer is held on the carried window.
-const GRIP: Vec2 = Vec2::new(100.0, 12.0);
+/// Where the pointer is held on the carried window: below and left of it, so
+/// the window does not hide the drop target under the pointer.
+const GRIP: Vec2 = Vec2::new(-14.0, 44.0);
 
 /// The size the window had, and the pointer as last seen, while carried.
 #[derive(Clone, Copy)]
 struct Carry {
     size: Vec2,
     pointer: Pos2,
+    /// Where in the window the pointer took hold of it.
+    grab: Vec2,
+    /// The window is shrunk to its header (it is over the main window).
+    shrunk: bool,
 }
 
 /// A handle was dragged this frame.
@@ -42,6 +47,7 @@ fn can_place_windows() -> bool {
 /// What the header of a window asked for.
 pub(super) struct Header {
     pub dock: bool,
+    pub close: bool,
     pub moved: Option<Moved>,
 }
 
@@ -52,6 +58,7 @@ pub(super) struct Header {
 pub(super) fn header(ctx: &egui::Context, theme: &Theme, panel: PanelTab, title: &str) -> Header {
     let mut out = Header {
         dock: false,
+        close: false,
         moved: None,
     };
     let c = &theme.colors;
@@ -65,6 +72,9 @@ pub(super) fn header(ctx: &egui::Context, theme: &Theme, panel: PanelTab, title:
         .show(ctx, |ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let side = ui.spacing().interact_size.y;
+                if widgets::icon_button(ui, theme, icons::PANEL_WINDOW_CLOSE, "Close").clicked() {
+                    out.close = true;
+                }
                 if widgets::icon_button(ui, theme, icons::PANEL_DOCK, "Dock").clicked() {
                     out.dock = true;
                 }
@@ -91,37 +101,51 @@ pub(super) fn header(ctx: &egui::Context, theme: &Theme, panel: PanelTab, title:
     out
 }
 
-/// Carry the window with the pointer while the handle is dragged, and report
-/// where the pointer is.
+/// Move the window with the pointer while the handle is dragged, and report
+/// where the pointer is. Over the main window the window shrinks to its
+/// header, so it does not hide the drop targets; away from it, it keeps its
+/// size.
 fn carry(ctx: &egui::Context, drag: &egui::Response, panel: PanelTab) -> Option<Moved> {
     if !can_place_windows() {
+        // The compositor moves it; there is nowhere to dock by dragging.
+        if drag.drag_started() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+        }
         return None;
     }
     let key = egui::Id::new(("panel_carry", panel));
-    let (inner, outer, local) = ctx.input(|i| {
-        (
-            i.viewport().inner_rect,
-            i.viewport().outer_rect,
-            i.pointer.latest_pos(),
-        )
-    });
+    let (inner, local) = ctx.input(|i| (i.viewport().inner_rect, i.pointer.latest_pos()));
     let pointer = inner.zip(local).map(|(inner, p)| inner.min + p.to_vec2());
     if drag.drag_started() {
         let size = inner.map_or(Vec2::from(LEAST), |r| r.size());
         let pointer = pointer.unwrap_or_default();
-        ctx.data_mut(|d| d.insert_temp(key, Carry { size, pointer }));
-        ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(CARRIED));
-        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(CARRIED));
+        let grab = local.map_or(Vec2::ZERO, |p| p.to_vec2());
+        let carry = Carry {
+            size,
+            pointer,
+            grab,
+            shrunk: false,
+        };
+        ctx.data_mut(|d| d.insert_temp(key, carry));
     }
     if drag.dragged() {
-        let (pointer, inner, outer) = (pointer?, inner?, outer?);
-        ctx.data_mut(|d| {
-            if let Some(carry) = d.get_temp::<Carry>(key) {
-                d.insert_temp(key, Carry { pointer, ..carry });
-            }
-        });
-        let frame = inner.min - outer.min;
-        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pointer - GRIP - frame));
+        let pointer = pointer?;
+        let mut carry: Carry = ctx.data(|d| d.get_temp(key))?;
+        carry.pointer = pointer;
+        let main = ctx.input_for(egui::ViewportId::ROOT, |i| i.viewport().inner_rect);
+        let over_main = main.is_some_and(|m| m.contains(pointer));
+        if over_main != carry.shrunk {
+            carry.shrunk = over_main;
+            let (least, size) = match over_main {
+                true => (CARRIED, CARRIED),
+                false => (Vec2::from(LEAST), carry.size),
+            };
+            ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(least));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+        }
+        ctx.data_mut(|d| d.insert_temp(key, carry));
+        let grab = if carry.shrunk { GRIP } else { carry.grab };
+        ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pointer - grab));
         ctx.request_repaint();
         return Some(Moved {
             pointer,
@@ -131,8 +155,10 @@ fn carry(ctx: &egui::Context, drag: &egui::Response, panel: PanelTab) -> Option<
     if drag.drag_stopped() {
         let carry: Carry = ctx.data(|d| d.get_temp(key))?;
         ctx.data_mut(|d| d.remove::<Carry>(key));
-        ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(Vec2::from(LEAST)));
-        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(carry.size));
+        if carry.shrunk {
+            ctx.send_viewport_cmd(egui::ViewportCommand::MinInnerSize(Vec2::from(LEAST)));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(carry.size));
+        }
         return Some(Moved {
             pointer: carry.pointer,
             released: true,

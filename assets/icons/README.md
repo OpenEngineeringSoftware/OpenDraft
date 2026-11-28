@@ -259,6 +259,7 @@ The starting drawings are Lucide's (ISC licence, `LICENSE-Lucide.txt`).
 | ![](osnap-quadrant.svg) | `osnap-quadrant.svg` | grid-3x3 | app/status_toggles.rs |
 | ![](osnap-tangent.svg) | `osnap-tangent.svg` | grid-3x3 | app/status_toggles.rs |
 | ![](panel-dock.svg) | `panel-dock.svg` | dock | app/detached_drag.rs (Dock a panel that is in a window of its own back into the main window.) |
+| ![](panel-window-close.svg) | `panel-window-close.svg` | x | app/detached_drag.rs (Close the window of a panel that is in a window of its own.) |
 | ![](panel-section-closed.svg) | `panel-section-closed.svg` | chevron-right | properties_ui.rs |
 | ![](panel-section-open.svg) | `panel-section-open.svg` | chevron-down | properties_ui.rs |
 | ![](power-select-pick.svg) | `power-select-pick.svg` | mouse-pointer-2 | app/power_select_dialog.rs |

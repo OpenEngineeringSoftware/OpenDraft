@@ -106,6 +106,8 @@ fn show(
             .with_title(title.as_str())
             .with_inner_size(size)
             .with_min_inner_size(detached_drag::LEAST)
+            .with_decorations(false)
+            .with_taskbar(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop);
         if let Some(p) = at {
             builder = builder.with_position(egui::pos2(p[0], p[1]));
@@ -123,6 +125,9 @@ fn show(
             }
             let header = detached_drag::header(ctx, theme, panel, &title);
             asked.dock.extend(header.dock.then_some(panel));
+            asked.close.extend(header.close.then_some(panel));
+            super::detached_frame::resize_zones(ctx, panel);
+            super::detached_frame::border(ctx, theme);
             asked.moved = header.moved.map(|m| (panel, m));
             egui::CentralPanel::default()
                 .frame(egui::Frame::NONE.fill(fill))
