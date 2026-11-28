@@ -6,6 +6,7 @@ use opendraft_commands::Registry;
 use opendraft_ui::Theme;
 
 use super::command_line_strip::StripRows;
+use super::detached_windows;
 use super::OpenDraftApp;
 use crate::canvas_style;
 use crate::dock::{self, PanelTab};
@@ -28,6 +29,7 @@ impl OpenDraftApp {
             Some(_) => (rows.height(2), rows.height(0)),
             None => (dock::COMMAND_LINE_MIN_HEIGHT, dock::COLLAPSED_HEIGHT),
         };
+        let in_windows = self.state.settings.dialogs_in_windows;
         let (space, settings) = (self.state.space(), &self.state.settings);
         let (paper, colour) = (settings.layout_paper, settings.layout_paper_colour);
         let mut viewer = PanelViewer {
@@ -69,6 +71,16 @@ impl OpenDraftApp {
             .show(ctx, |ui| {
                 dock::show_area(ui, &mut self.dock, style, &self.theme, &mut viewer);
             });
+        let (fill, on) = (self.theme.colors.window_bg, in_windows);
+        let (dock, places) = (&mut self.dock, &mut self.places);
+        detached_windows::run(
+            ctx,
+            fill,
+            on,
+            (dock, places),
+            &mut self.detached,
+            &mut viewer,
+        );
         let PanelViewer {
             cursor,
             click,
