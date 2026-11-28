@@ -195,22 +195,43 @@ pub fn finish(dock: &mut DockState<PanelTab>, panel: PanelTab, drop: Drop, at: P
         Drop::Float => {}
         Drop::Dock(target) => {
             dock.remove_tab(found);
-            let Some((surface, node, _)) = dock.find_tab(&target.anchor) else {
-                // The anchor went with it; put the panel back somewhere.
-                dock.add_window(vec![panel]);
-                return;
-            };
-            let fraction = match target.side {
-                Side::Left | Side::Above => target.share,
-                Side::Right | Side::Below => 1.0 - target.share,
-            };
-            let leaf = Node::leaf(panel);
-            dock.split((surface, node), target.side.split(), fraction, leaf);
-            if let Some((surface, node, _)) = dock.find_tab(&panel) {
-                dock.set_focused_node_and_surface((surface, node));
-            }
+            insert(dock, panel, target);
         }
     }
+}
+
+/// Dock `panel`, which is not in the dock, on `target`'s side of its anchor.
+pub fn insert(dock: &mut DockState<PanelTab>, panel: PanelTab, target: Target) {
+    let Some((surface, node, _)) = dock.find_tab(&target.anchor) else {
+        // The anchor went with it; put the panel back somewhere.
+        dock.add_window(vec![panel]);
+        return;
+    };
+    let fraction = match target.side {
+        Side::Left | Side::Above => target.share,
+        Side::Right | Side::Below => 1.0 - target.share,
+    };
+    let leaf = Node::leaf(panel);
+    dock.split((surface, node), target.side.split(), fraction, leaf);
+    if let Some((surface, node, _)) = dock.find_tab(&panel) {
+        dock.set_focused_node_and_surface((surface, node));
+    }
+}
+
+/// Put `panel`, which is not in the dock, among the tabs of the strip whose
+/// tab bar `at` is on. False when `at` is on no tab bar.
+pub fn join_bar(dock: &mut DockState<PanelTab>, panel: PanelTab, at: Pos2) -> bool {
+    let node = leaves(dock)
+        .find(|(_, rect, tabs)| visible_bar(dock, *rect, tabs).is_some_and(|bar| bar.contains(at)))
+        .map(|(node, _, _)| node);
+    let Some(node) = node else {
+        return false;
+    };
+    let strip = &mut dock.main_surface_mut()[node];
+    let end = strip.tabs_count();
+    strip.insert_tab(egui_dock::TabIndex(end), panel);
+    dock.set_focused_node_and_surface((SurfaceIndex::main(), node));
+    true
 }
 
 #[cfg(test)]
@@ -251,6 +272,31 @@ mod tests {
 
     fn drawing() -> Rect {
         Rect::from_min_max(egui::pos2(130.0, 0.0), egui::pos2(826.0, 600.0))
+    }
+
+    #[test]
+    fn a_panel_not_in_the_dock_docks_on_a_target_or_joins_a_tab_bar() {
+        let mut dock = laid_out();
+        let found = dock.find_tab(&PanelTab::Layers).unwrap();
+        dock.remove_tab(found);
+        let size = egui::vec2(174.0, 180.0);
+        let at = drawing().center();
+        let all = targets(&dock, PanelTab::Layers, size, at);
+        let right = all.iter().find(|t| t.side == Side::Right).unwrap();
+        insert(&mut dock, PanelTab::Layers, *right);
+        assert!(dock.find_tab(&PanelTab::Layers).is_some());
+        // A tab bar the user can see takes it as another tab.
+        let bar = egui::pos2(60.0, 5.0);
+        let found = dock.find_tab(&PanelTab::Layers).unwrap();
+        dock.remove_tab(found);
+        assert!(join_bar(&mut dock, PanelTab::Layers, bar));
+        let (_, node, _) = dock.find_tab(&PanelTab::Layers).unwrap();
+        assert_eq!(node, main_leaf(&dock, PanelTab::Properties).unwrap());
+        assert!(!join_bar(
+            &mut dock,
+            PanelTab::Assistant,
+            drawing().center()
+        ));
     }
 
     #[test]
