@@ -3,7 +3,7 @@
 use opendraft_core::{arc, Attr, Attributes, Document, Entity, EntityId, Layout, Object, Viewport};
 
 use super::{hex, true_color, weight_code, Handles, Ids};
-use crate::dxf::write::{aci_for, dxf_name, finite, Out};
+use crate::dxf::write::{aci_for, dxf_layer_name, finite, Out};
 use crate::FileError;
 
 /// The sheet-wide viewport AutoCAD keeps first in a layout, then each viewport.
@@ -124,12 +124,13 @@ pub(super) fn entity_head(
 ) -> u32 {
     let layer = document
         .layer(attrs.layer)
-        .map_or_else(|| "0".to_owned(), |l| dxf_name(&l.name));
+        .map_or_else(|| "0".to_owned(), |l| dxf_layer_name(document, l));
     out.pair(0, kind);
     let handle = ids
         .annotations
         .get(&id)
         .copied()
+        .or_else(|| ids.clip_handles(id).map(|handles| handles.insert))
         .unwrap_or_else(|| h.next());
     out.pair(5, hex(handle));
     out.pair(330, hex(owner));

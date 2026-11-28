@@ -54,6 +54,7 @@ pub(crate) mod text_raster;
 #[cfg(test)]
 mod track_drawn_tests;
 mod twist;
+mod xref_paint;
 pub use text_paint::paint_text;
 mod types;
 
@@ -370,6 +371,8 @@ impl View {
             }
             self.paint_axes(&painter, rect, style, document.ccs());
             self.paint_model(&painter, rect, style, document, selection, hover);
+            self.paint_xref_markers(&painter, rect, style, document);
+            self.paint_clip_frames(&painter, rect, style, document);
         }
         // Inside a viewport the model is only drawn within its window.
         let painter = match self.clip {

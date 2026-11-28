@@ -193,7 +193,7 @@ fn add_viewports(
         let objects = document
             .visible_in(None)
             .filter(|o| plotted(o.attrs.layer) && o.bounds().intersects(&shown));
-        let pieces = objects.flat_map(|o| document.drawn(o));
+        let pieces = objects.flat_map(|o| document.drawn_with_frame(o));
         for object in pieces.filter(|o| plotted(o.attrs.layer)) {
             let to_paper = |p: Point| vp.model_to_paper(p);
             add_viewed(
@@ -232,7 +232,7 @@ fn add_paper(
     for object in document
         .visible_in(Some(layout.id))
         .filter(|o| shown(o.attrs.layer))
-        .flat_map(|o| document.drawn(o))
+        .flat_map(|o| document.drawn_with_frame(o))
         .filter(|o| shown(o.attrs.layer))
     {
         add_viewed(

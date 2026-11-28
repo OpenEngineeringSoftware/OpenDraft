@@ -186,6 +186,9 @@ pub struct AppState {
     pub recovery_report: crate::autosave::RecoveryReport,
     /// The worker that reads and writes files off the UI thread.
     pub(crate) io: Io,
+    /// The external-reference read under way for the running command: its
+    /// job and the request it answers.
+    pub(crate) xref_job: Option<(u64, opendraft_core::XrefLoadRequest)>,
     /// Drawings (by uid) being written right now.
     pub(crate) saving: Vec<u64>,
     /// Files being read right now.
@@ -265,6 +268,7 @@ impl AppState {
             pending_recovery: Vec::new(),
             recovery_report: Default::default(),
             io: crate::files::default_io(),
+            xref_job: None,
             saving: Vec::new(),
             opening: Vec::new(),
             large_opens: Vec::new(),

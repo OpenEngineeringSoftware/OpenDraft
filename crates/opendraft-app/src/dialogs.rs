@@ -26,6 +26,8 @@ pub struct CommandDialogs {
     pub editor: Option<EditorDraft>,
     pub block: Option<BlockDraft>,
     pub field: Option<FieldDraft>,
+    /// The Attach External Reference dialog, while it is open.
+    pub xref_attach: Option<opendraft_core::XrefAttachDraft>,
     /// The Drawing Properties dialog, while it is open.
     pub properties: Option<DrawingProperties>,
     /// The Plot dialog (`PLOT`, `PREVIEW`), while it is open.
@@ -55,6 +57,7 @@ impl AppState {
             || self.command_dialogs.editor.is_some()
             || self.command_dialogs.block.is_some()
             || self.command_dialogs.field.is_some()
+            || self.command_dialogs.xref_attach.is_some()
             || (self.purge.open && !self.command_running())
             || self.show_linetypes
             || self.show_text_styles

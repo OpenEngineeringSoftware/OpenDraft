@@ -126,7 +126,9 @@ pub(crate) fn typed_reply_with_mode(
         | Wants::AttributeDefinitionDialog
         | Wants::AttributeEditorDialog
         | Wants::BlockDialog
-        | Wants::FieldDialog => None,
+        | Wants::FieldDialog
+        | Wants::XrefLoad
+        | Wants::XrefAttachDialog => None,
     };
     answer.or_else(|| keyword_reply(ask, text))
 }

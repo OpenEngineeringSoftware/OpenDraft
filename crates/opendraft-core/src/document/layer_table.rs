@@ -31,10 +31,30 @@ impl Document {
         self.current_layer
     }
 
-    /// Make `id` the layer new objects go on. Ignores unknown ids.
-    pub fn set_current_layer(&mut self, id: LayerId) {
-        if self.layer_positions.contains_key(&id) {
+    /// Why layer `id` cannot take `name`, when it cannot. An external
+    /// reference's bound layer is named after the reference and its source
+    /// layer, and `|` belongs to those names alone.
+    pub fn layer_rename_problem(&self, id: LayerId, name: &str) -> Option<&'static str> {
+        if self.xref_layer_owner(id).is_some() {
+            Some(crate::key!(
+                "An external reference layer cannot be renamed; detach the reference."
+            ))
+        } else if name.contains('|') {
+            Some(crate::key!("A layer name cannot contain |."))
+        } else {
+            None
+        }
+    }
+
+    /// Make `id` the layer new objects go on. Ignores unknown ids and an
+    /// external reference's bound layer, as AutoCAD does. Returns whether it
+    /// became the current layer.
+    pub fn set_current_layer(&mut self, id: LayerId) -> bool {
+        if self.layer_positions.contains_key(&id) && self.xref_layer_owner(id).is_none() {
             self.current_layer = id;
+            true
+        } else {
+            false
         }
     }
 
@@ -94,6 +114,11 @@ impl Document {
             o.attrs.layer == id
                 || matches!(&o.entity, crate::Entity::Insert(i) if i.uses_layer_for_attributes(id))
         }) || self.blocks.iter().any(|b| b.uses_layer(id))
+            || self
+                .xrefs
+                .iter()
+                .flat_map(|x| x.blocks.iter())
+                .any(|b| b.uses_layer(id))
     }
 
     /// The layers that [`layer_in_use`](Self::layer_in_use) says are in use,
@@ -113,7 +138,12 @@ impl Document {
             let id = layer.id;
             if !used.contains(&id)
                 && (inserts.iter().any(|i| i.uses_layer_for_attributes(id))
-                    || self.blocks.iter().any(|b| b.uses_layer(id)))
+                    || self.blocks.iter().any(|b| b.uses_layer(id))
+                    || self
+                        .xrefs
+                        .iter()
+                        .flat_map(|x| x.blocks.iter())
+                        .any(|b| b.uses_layer(id)))
             {
                 used.insert(id);
             }
@@ -127,6 +157,10 @@ impl Document {
             Some(crate::key!("Layer 0 cannot be deleted"))
         } else if id == self.current_layer {
             Some(crate::key!("The current layer cannot be deleted"))
+        } else if self.xref_layer_owner(id).is_some() {
+            Some(crate::key!(
+                "An external reference layer cannot be deleted; detach the reference."
+            ))
         } else if self.layer_in_use(id) {
             Some(crate::key!("A layer with objects on it cannot be deleted"))
         } else {

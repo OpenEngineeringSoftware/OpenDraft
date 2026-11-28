@@ -33,6 +33,8 @@ pub(crate) struct PendingInsert<K> {
     pub attributes: Vec<AttributeReference>,
     /// Distances of the block's linear parameters this reference changes.
     pub dynamic: Vec<(ParameterId, DynamicValue)>,
+    /// Whether the block is an external reference's root.
+    pub is_xref: bool,
 }
 
 /// Gives `insert` its attributes, brought from the drawing into the block's
@@ -169,10 +171,11 @@ pub(crate) fn importable_names<'a>(names: impl Iterator<Item = &'a str> + Clone)
         .collect()
 }
 
-/// The sentence for references to other drawings, which are not read.
+/// The sentence for references to other drawings: they are kept, but their
+/// content is not in this file, so nothing is drawn until they are reloaded.
 pub(crate) fn external_references(count: u64) -> String {
     format!(
-        "Skipped {} (xrefs are not imported).",
+        "Attached {} but did not load their drawings; reload each one to show it.",
         plural(count, "external reference")
     )
 }
@@ -222,6 +225,14 @@ impl<K: Clone + Eq + Hash> ImportedBlocks<K> {
 
     /// The reference as an entity, or `None` (counted) when its block is not
     /// there or its transform is not usable.
+    /// The definition built under the file's key, if it came across.
+    pub(crate) fn block(&self, key: &K) -> Option<&Arc<BlockDef>>
+    where
+        K: std::hash::Hash + Eq,
+    {
+        self.built.get(key)
+    }
+
     pub(crate) fn insert(&mut self, p: PendingInsert<K>) -> Option<Entity> {
         let Some(block) = self.built.get(&p.block) else {
             self.missing += 1;
@@ -239,6 +250,7 @@ impl<K: Clone + Eq + Hash> ImportedBlocks<K> {
             rotation: p.rotation,
             attributes: Vec::new(),
             dynamic: None,
+            is_xref: p.is_xref,
         };
         let mut insert = self.with_values(insert, &p.dynamic);
         if insert.is_valid() && attach_attributes(&mut insert, &p.attributes) {
@@ -432,6 +444,7 @@ mod tests {
             rotation: 0.0,
             attributes: Vec::new(),
             dynamic: Vec::new(),
+            is_xref: false,
         };
         (Item::Insert(i), Attributes::on_layer(LayerId::DEFAULT))
     }
@@ -475,6 +488,7 @@ mod tests {
             rotation: 0.0,
             attributes: Vec::new(),
             dynamic: Vec::new(),
+            is_xref: false,
         });
         doc.add(entity.unwrap());
         doc.validate().unwrap();
@@ -504,6 +518,7 @@ mod tests {
                 rotation: 0.0,
                 attributes: Vec::new(),
                 dynamic: Vec::new(),
+                is_xref: false,
             })
             .is_none());
         assert_eq!(

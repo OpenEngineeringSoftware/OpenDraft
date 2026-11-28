@@ -35,7 +35,31 @@ const INSIDE_HATCH: f64 = 0.999;
 
 /// [`distance_to_entity`] for a stored object, which for a dimension uses the
 /// picture the object remembers instead of building it again.
+#[cfg(test)]
 pub fn distance_to_object(object: &Object, p: Point) -> f64 {
+    distance_to_drawn(None, object, p)
+}
+
+/// [`distance_to_object`] with the drawing, so a clipped reference is measured
+/// by what it draws, not by its whole snapshot.
+fn distance_to_drawn(document: Option<&Document>, object: &Object, p: Point) -> f64 {
+    if let Some(pieces) = document.and_then(|document| document.insert_pieces(object)) {
+        let d = pieces
+            .iter()
+            .map(|piece| distance_to_entity(&piece.entity, p))
+            .fold(f64::INFINITY, f64::min);
+        if d.is_finite() {
+            return d;
+        }
+        if let Entity::Insert(insert) = &object.entity {
+            return distance_to_entity(
+                &Entity::Point {
+                    at: insert.insertion,
+                },
+                p,
+            );
+        }
+    }
     match object.dimension_picture() {
         Some(pieces) => pieces
             .iter()
@@ -68,12 +92,20 @@ pub fn distance_to_entity(entity: &Entity, p: Point) -> f64 {
             .iter()
             .map(|piece| distance_to_entity(piece, p))
             .fold(f64::INFINITY, f64::min),
-        // A block is picked by what it draws.
-        Entity::Insert(i) => i
-            .picture()
-            .iter()
-            .map(|piece| distance_to_entity(piece, p))
-            .fold(f64::INFINITY, f64::min),
+        // A block is picked by what it draws; an empty one (an unloaded
+        // external reference, say) by its insertion point.
+        Entity::Insert(i) => {
+            let d = i
+                .picture()
+                .iter()
+                .map(|piece| distance_to_entity(piece, p))
+                .fold(f64::INFINITY, f64::min);
+            if d.is_finite() {
+                d
+            } else {
+                distance_to_entity(&Entity::Point { at: i.insertion }, p)
+            }
+        }
         // The area the text fills stands for the glyphs; empty space in a
         // bigger box is not picked, so what is drawn there still can be.
         // A template is picked by its tag, as text is.
@@ -146,7 +178,8 @@ pub(crate) fn probe(p: Point, tolerance: f64) -> Bounds {
 /// [`pick`] among the selectable objects of the space being edited, asking
 /// the document's index which are near enough to be worth testing.
 pub(crate) fn pick_here(document: &Document, p: Point, tolerance: f64) -> Option<EntityId> {
-    pick(
+    pick_in(
+        Some(document),
         document.selectable_here_in_rect(probe(p, tolerance)),
         p,
         tolerance,
@@ -155,7 +188,8 @@ pub(crate) fn pick_here(document: &Document, p: Point, tolerance: f64) -> Option
 
 /// [`pick_here`] among every visible object, those on locked layers too.
 pub(crate) fn pick_visible_here(document: &Document, p: Point, tolerance: f64) -> Option<EntityId> {
-    pick(
+    pick_in(
+        Some(document),
         document.visible_here_in_rect(probe(p, tolerance)),
         p,
         tolerance,
@@ -169,6 +203,15 @@ pub fn pick<'a>(
     p: Point,
     tolerance: f64,
 ) -> Option<EntityId> {
+    pick_in(None, objects, p, tolerance)
+}
+
+fn pick_in<'a>(
+    document: Option<&Document>,
+    objects: impl IntoIterator<Item = &'a Object>,
+    p: Point,
+    tolerance: f64,
+) -> Option<EntityId> {
     let probe = probe(p, tolerance);
     let mut best: Option<(EntityId, f64)> = None;
     for object in objects {
@@ -178,7 +221,7 @@ pub fn pick<'a>(
         let Object { id, entity, .. } = object;
         let d = match entity {
             Entity::Hatch(h) if h.contains(p, hatch_tolerance(h)) => tolerance * INSIDE_HATCH,
-            _ => distance_to_object(object, p),
+            _ => distance_to_drawn(document, object, p),
         };
         if d <= tolerance && best.is_none_or(|(_, best_d)| d <= best_d) {
             best = Some((*id, d));

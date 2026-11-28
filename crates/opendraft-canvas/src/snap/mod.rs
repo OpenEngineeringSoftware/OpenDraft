@@ -9,8 +9,10 @@
 //! the aperture beats Nearest, which beats the grid; within a class the closer
 //! to the pointer wins, and exact ties go to the more specific mode.
 
-use opendraft_core::{Bounds, EntityId, Object, Point};
+use opendraft_core::{Bounds, Document, Entity, EntityId, Object, Point};
 
+#[cfg(test)]
+mod clip_tests;
 mod context;
 mod cycle;
 #[cfg(test)]
@@ -410,6 +412,24 @@ pub fn snap_all<'a>(
     objects: impl IntoIterator<Item = &'a Object>,
     probe: &Probe<'_>,
 ) -> Vec<SnapPoint> {
+    snap_all_with(None, objects, probe)
+}
+
+/// [`snap_all`] with the drawing, so a clipped reference offers snaps only
+/// from the part it draws.
+pub fn snap_all_in<'a>(
+    document: &Document,
+    objects: impl IntoIterator<Item = &'a Object>,
+    probe: &Probe<'_>,
+) -> Vec<SnapPoint> {
+    snap_all_with(Some(document), objects, probe)
+}
+
+fn snap_all_with<'a>(
+    document: Option<&Document>,
+    objects: impl IntoIterator<Item = &'a Object>,
+    probe: &Probe<'_>,
+) -> Vec<SnapPoint> {
     let modes = probe.modes;
     if !modes.enabled {
         return Vec::new();
@@ -427,7 +447,7 @@ pub fn snap_all<'a>(
         .collect();
     let mut found: Vec<Ranked> = near
         .iter()
-        .flat_map(|o| object_candidates(o))
+        .flat_map(|o| object_candidates(document, o))
         .filter(|c| modes.allows(c.kind))
         .map(|c| Ranked {
             snap: c,
@@ -453,7 +473,7 @@ pub fn snap_all<'a>(
         || modes.perpendicular
         || modes.tangent;
     if wants_pieces {
-        let scene = context::Scene::new(&near);
+        let scene = context::Scene::new(document, &near);
         // With no true crossing in 2D, apparent crossings are the same points.
         let crossing = match (modes.intersection, modes.apparent_intersection) {
             (true, _) => Some(SnapKind::Intersection),
@@ -498,7 +518,7 @@ pub fn snap_all<'a>(
     }
     if modes.nearest {
         for object in &near {
-            for point in object_nearest_points(object, cursor) {
+            for point in object_nearest_points(document, object, cursor) {
                 let dist = distance(point, cursor);
                 if dist <= tolerance {
                     found.push(Ranked {
@@ -578,8 +598,21 @@ pub fn snap<'a>(
 }
 
 /// The nearest point of each piece of a stored object: a dimension uses the
-/// picture the object remembers.
-fn object_nearest_points(object: &Object, cursor: Point) -> Vec<Point> {
+/// picture the object remembers, and a clipped reference only what it draws.
+fn object_nearest_points(
+    document: Option<&Document>,
+    object: &Object,
+    cursor: Point,
+) -> Vec<Point> {
+    if let Entity::Insert(insert) = &object.entity {
+        if let Some(document) = document.filter(|document| document.insert_is_clipped(insert)) {
+            let pieces = document.insert_pieces(object).unwrap_or_default();
+            return pieces
+                .iter()
+                .flat_map(|piece| nearest_points(&piece.entity, cursor))
+                .collect();
+        }
+    }
     match object.dimension_picture() {
         Some(picture) => picture
             .iter()

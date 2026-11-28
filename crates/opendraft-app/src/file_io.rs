@@ -117,6 +117,7 @@ impl AppState {
             Done::Printed { printer, result } => self.finish_print(&printer, result),
             Done::FromTemplate { name, result } => self.finish_template(&name, *result),
             Done::Autosaved(results) => self.finish_autosave(results),
+            Done::XrefPlanned { request, reply } => self.finish_xref_plan(&request, *reply),
             Done::Finished => {}
         }
     }

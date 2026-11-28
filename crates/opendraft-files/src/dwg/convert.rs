@@ -5,13 +5,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use opendraft_core::aci::aci_rgb;
 use opendraft_core::{
-    arc, AngleFormat, Attr, Attributes, Color, Document, Ellipse, Entity, InsertUnits,
-    KnotParameterization, Layer, LayerId, LengthFormat, LinetypeId, Lineweight, Point, Spline,
-    StrokeElement, Units,
+    arc, Attr, Attributes, Color, Document, Ellipse, Entity, KnotParameterization, Layer, LayerId,
+    LinetypeId, Lineweight, Point, Spline, StrokeElement,
 };
-use opendraft_dwg::{
-    Drawing, DwgColor, DwgEntity, DwgHandle, DwgHeader, DwgLinetype, DwgLineweight, Shape,
-};
+use opendraft_dwg::{Drawing, DwgColor, DwgEntity, DwgHandle, DwgLinetype, DwgLineweight, Shape};
 
 use super::attribute;
 use super::text::{self, Styles};
@@ -19,26 +16,8 @@ use crate::block_import::{self, ImportedBlocks, Item, PendingBlock, PendingInser
 use crate::native::spline::MAX_FILE_SPLINE_POINTS;
 use crate::FileError;
 
-/// The unit settings of a drawing's header.
-fn units(header: &DwgHeader) -> Units {
-    let defaults = Units::default();
-    let precision = |v: u16| u8::try_from(v.min(8)).unwrap_or(8);
-    Units {
-        length: LengthFormat::from_code(i64::from(header.linear_units)).unwrap_or(defaults.length),
-        length_precision: precision(header.linear_precision),
-        angle: AngleFormat::from_code(i64::from(header.angular_units)).unwrap_or(defaults.angle),
-        angle_precision: precision(header.angular_precision),
-        clockwise: header.angles_clockwise,
-        base_angle: if header.angle_base.is_finite() {
-            header.angle_base
-        } else {
-            0.0
-        },
-        insert: InsertUnits::from_code(i64::from(header.insert_units))
-            .unwrap_or(InsertUnits::UNITLESS),
-    }
-    .sanitized()
-}
+mod header;
+mod xrefs;
 
 pub(super) fn color(c: DwgColor) -> Color {
     match c {
@@ -149,7 +128,16 @@ fn fit_spline(shape: &Shape) -> Result<Spline, Refused> {
 }
 
 /// The drawing's object for a shape, or why there is none.
+#[cfg(test)]
 fn item(shape: &Shape, styles: &Styles) -> Result<Item<DwgHandle>, Refused> {
+    item_with(shape, styles, &HashSet::new())
+}
+
+fn item_with(
+    shape: &Shape,
+    styles: &Styles,
+    xrefs: &HashSet<DwgHandle>,
+) -> Result<Item<DwgHandle>, Refused> {
     Ok(Item::Entity(match shape {
         Shape::Line { start, end } => Entity::Line {
             start: point(*start),
@@ -231,6 +219,7 @@ fn item(shape: &Shape, styles: &Styles) -> Result<Item<DwgHandle>, Refused> {
                     .filter_map(|a| attribute::reference(a, styles))
                     .collect(),
                 dynamic: Vec::new(),
+                is_xref: xrefs.contains(block),
             }));
         }
         Shape::AttributeDefinition { .. } => {
@@ -314,7 +303,7 @@ pub(super) fn to_document(
 ) -> Result<(Document, Notes), FileError> {
     let mut document = Document::default();
     document.begin_bulk_load();
-    document.set_units(units(&drawing.header));
+    document.set_units(header::units(&drawing.header));
     // The Model tab's coordinate system; a 3D or mirrored UCS stays World.
     let [origin, x, y] = drawing.header.model_ucs;
     if let Some(ccs) = opendraft_core::Ccs::from_axes(origin, x, y) {
@@ -391,14 +380,15 @@ pub(super) fn to_document(
     }
 
     let styles = text::import_styles(&mut document, &drawing.text_styles);
-    let mut pending = Vec::with_capacity(drawing.blocks.len());
+    let xref_handles = xrefs::handles(drawing);
+    let mut pending = Vec::with_capacity(drawing.blocks.len() + drawing.xrefs.len());
     let names = block_import::importable_names(drawing.blocks.iter().map(|b| b.name.as_str()));
     for (b, name) in drawing.blocks.iter().zip(names) {
         let mut items = Vec::with_capacity(b.entities.len());
         for e in &b.entities {
             let attrs = attributes(e, &ids, &mut document, &mut notes.linetypes)?;
             notes.bad_text += attribute::dropped(&e.shape, &styles);
-            match item(&e.shape, &styles) {
+            match item_with(&e.shape, &styles, &HashSet::new()) {
                 Ok(made) => items.push((attribute::numbered(made, &mut document), attrs)),
                 Err(why) => notes.refused(why),
             }
@@ -413,7 +403,12 @@ pub(super) fn to_document(
             dynamic: None,
         });
     }
+    pending.extend(xrefs::pending(drawing));
     let mut blocks = ImportedBlocks::build(&mut document, pending);
+
+    let records = xrefs::records(drawing, &document, &blocks);
+    let attached = records.len() as u64;
+    document.set_xrefs(records);
 
     for (n, e) in drawing.entities.iter().enumerate() {
         if n % 1024 == 0 && cancelled.load(Ordering::Relaxed) {
@@ -421,21 +416,28 @@ pub(super) fn to_document(
         }
         let attrs = attributes(e, &ids, &mut document, &mut notes.linetypes)?;
         notes.bad_text += attribute::dropped(&e.shape, &styles);
-        let entity =
-            match item(&e.shape, &styles).map(|made| attribute::numbered(made, &mut document)) {
-                Ok(Item::Entity(entity)) => Some(entity),
-                Ok(Item::Insert(insert)) => blocks.insert(insert),
-                Err(why) => {
-                    notes.refused(why);
-                    None
-                }
-            };
+        let entity = match item_with(&e.shape, &styles, &xref_handles)
+            .map(|made| attribute::numbered(made, &mut document))
+        {
+            Ok(Item::Entity(entity)) => Some(entity),
+            Ok(Item::Insert(insert)) => blocks.insert(insert),
+            Err(why) => {
+                notes.refused(why);
+                None
+            }
+        };
         if let Some(entity) = entity {
             document.add_with(entity, attrs);
         }
     }
     notes.linetypes.finish(&mut document);
     notes.blocks = blocks.warnings();
+    if attached > 0 {
+        notes.blocks.push(format!(
+            "Attached {} but did not load their drawings; reload each one to show it.",
+            crate::plural(attached, "external reference")
+        ));
+    }
     document
         .validate()
         .map_err(|e| FileError::Invalid(e.to_string()))?;

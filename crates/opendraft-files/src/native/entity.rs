@@ -110,6 +110,9 @@ pub(super) enum EntityDto {
         /// The values this insert overrides, for a dynamic block.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         dynamic: Option<super::block_dynamic::DynamicStateDto>,
+        /// True when it places an external reference's root.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        xref: bool,
     },
     /// A template text in a block, or loose in the drawing.
     AttributeDefinition(AttributeDefinitionDto),
@@ -143,6 +146,16 @@ fn unit_direction(p: PointDto) -> Result<Point, FileError> {
 
 impl EntityDto {
     pub(super) fn from_entity(entity: &Entity, styles: &mut StylePool) -> Result<Self, FileError> {
+        Self::from_entity_in(entity, styles, &Blocks::new())
+    }
+
+    /// `from_entity`, with `known` naming blocks an insert may refer to that
+    /// are not in the host block table.
+    pub(super) fn from_entity_in(
+        entity: &Entity,
+        styles: &mut StylePool,
+        known: &Blocks,
+    ) -> Result<Self, FileError> {
         let dto = match entity {
             Entity::Point { at } => EntityDto::Point { at: point(*at) },
             Entity::Xline { origin, direction } => EntityDto::Xline {
@@ -213,6 +226,7 @@ impl EntityDto {
                         .dynamic
                         .as_deref()
                         .map(super::block_dynamic::DynamicStateDto::of),
+                    xref: i.is_xref,
                 });
             }
             Entity::Polyline {
@@ -228,7 +242,7 @@ impl EntityDto {
             },
         };
         // Refuse to write what could not be read back.
-        dto.to_entity(&Blocks::new(), styles.styles())?;
+        dto.to_entity(known, styles.styles())?;
         Ok(dto)
     }
 
@@ -247,6 +261,7 @@ impl EntityDto {
                 rotation,
                 attributes,
                 dynamic,
+                xref,
             } => insert_entity(
                 blocks,
                 *block,
@@ -255,6 +270,7 @@ impl EntityDto {
                 *rotation,
                 attributes,
                 dynamic.as_ref(),
+                *xref,
             )?,
             EntityDto::AttributeDefinition(d) => {
                 Entity::AttributeDefinition(Box::new(d.to_definition()?))

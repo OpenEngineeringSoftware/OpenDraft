@@ -37,7 +37,7 @@ pub fn plot_region(
     let objects = document
         .visible_in(None)
         .filter(|o| only.is_none_or(|ids| ids.contains(&o.id)) && o.bounds().intersects(&region));
-    for object in objects.flat_map(|o| document.drawn(o)) {
+    for object in objects.flat_map(|o| document.drawn_with_frame(o)) {
         add_viewed(
             &mut sheet,
             document,

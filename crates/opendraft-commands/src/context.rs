@@ -28,6 +28,11 @@ impl Context {
     }
 }
 
+/// The folder the active drawing is in, for resolving a relative xref path.
+/// `None` when the drawing has never been saved.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct XrefHostDir(pub Option<String>);
+
 #[cfg(test)]
 mod tests {
     use super::*;

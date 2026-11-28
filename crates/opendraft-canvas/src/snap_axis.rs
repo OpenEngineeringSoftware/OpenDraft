@@ -6,7 +6,7 @@ use opendraft_core::ortho::{axis_of_turned, on_axis_turned};
 use opendraft_core::{Ccs, Document, Point};
 
 use crate::hit::probe;
-use crate::snap::{snap_all, Probe, SnapId, SnapKind, SnapModes, SnapPoint};
+use crate::snap::{snap_all_in, Probe, SnapId, SnapKind, SnapModes, SnapPoint};
 
 /// Whether points are held to the horizontal or vertical (`ORTHOMODE`), and
 /// how firmly (`ORTHOLOCK`). Standard lets an object snap win, as in AutoCAD;
@@ -64,7 +64,11 @@ impl Aim<'_> {
             tracks: &self.tracks,
             track: self.track.as_ref(),
         };
-        snap_all(near.into_iter().chain(self.extra.iter()), &probe)
+        snap_all_in(
+            self.document,
+            near.into_iter().chain(self.extra.iter()),
+            &probe,
+        )
     }
 
     /// Where the pointer at `at` ends up, and the snap behind it.

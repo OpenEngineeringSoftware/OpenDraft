@@ -70,11 +70,13 @@ mod properties;
 pub(crate) mod spline;
 mod text;
 mod units;
+mod xref;
 
 use attr_dto::{attr_from_dto, attr_to_dto, AttrDto, ColorDto};
 use block::BlockDto;
 use dimension_style::{DimStylesDto, StylePool};
 use entity::EntityDto;
+use entity::PointDto;
 use layout::LayoutDto;
 use properties::PropertiesDto;
 use text::TextStyleDto;
@@ -272,6 +274,22 @@ struct DrawingDto {
     )]
     blocks: Vec<BlockDto>,
     next_block_id: u64,
+    /// The drawing's `INSBASE`; absent means the origin.
+    #[serde(default, skip_serializing_if = "xref::is_origin")]
+    insert_base: PointDto,
+    /// `VISRETAIN`; absent means true, the AutoCAD initial value.
+    #[serde(default = "xref::yes", skip_serializing_if = "xref::is_true")]
+    visretain: bool,
+    /// `XCLIPFRAME`; absent means 2 (frames drawn and plotted).
+    #[serde(default = "xref::two", skip_serializing_if = "xref::is_two")]
+    xclip_frame: u8,
+    /// External references, one per root block.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "limits::table_rows"
+    )]
+    xrefs: Vec<xref::XrefDto>,
     next_attribute_definition_id: u64,
     /// The linetype table and `LTSCALE`.
     #[serde(flatten)]
@@ -368,11 +386,17 @@ impl DrawingDto {
             .collect::<Result<_, FileError>>()?;
         let (next_object_id, next_layer_id) = document.next_ids();
         let (next_layout_id, next_viewport_id) = document.next_layout_ids();
+        let known = xref::known_blocks(document);
         let blocks = document
             .blocks()
             .iter()
-            .map(|b| BlockDto::from_block(b, &mut styles))
+            .map(|b| BlockDto::from_block_in(b, &mut styles, &known))
             .collect::<Result<_, FileError>>()?;
+        let xrefs = document
+            .xrefs()
+            .iter()
+            .map(|x| xref::XrefDto::of(x, &known, &mut styles))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             next_object_id,
             next_layer_id,
@@ -402,6 +426,10 @@ impl DrawingDto {
             mleader_styles: mleader_style::TableDto::of(document),
             blocks,
             next_block_id: document.next_block_id(),
+            insert_base: entity::point(document.insert_base()),
+            visretain: document.visretain(),
+            xclip_frame: document.xclip_frame(),
+            xrefs,
             next_attribute_definition_id: document.next_attribute_definition_id(),
             linetypes: linetype::TableDto::of(document),
             new_style: new_style::NewStyleDto::of(document),
@@ -1679,5 +1707,147 @@ mod tests {
         let never = AtomicBool::new(false);
         let loaded = NativeFormat.read_cancellable(&bytes, &never).unwrap();
         assert_eq!(loaded.document.len(), 3000);
+    }
+
+    /// A drawing with a loaded overlay: a bound layer, a local block, a
+    /// snapshot root and an insert, a non-zero `INSBASE` and `VISRETAIN` off.
+    fn xref_drawing() -> Document {
+        use std::collections::BTreeMap;
+        use std::sync::Arc;
+
+        use opendraft_core::{
+            BlockDef, BlockEntity, BlockObjectId, Insert, XrefDef, XrefKind, XrefLayer,
+            XrefPathType, XrefReport, XrefStamp,
+        };
+
+        let mut doc = Document::default();
+        let walls = doc.allocate_layer_id();
+        doc.push_layer(Layer::new(walls, "base|Walls"));
+        let local_id = doc.allocate_block_id();
+        let local = Arc::new(BlockDef {
+            id: local_id,
+            name: "Chairs".to_owned(),
+            base: Point::new(0.0, 0.0),
+            description: String::new(),
+            unit: Default::default(),
+            entities: vec![BlockEntity::new(
+                BlockObjectId(0),
+                Entity::Line {
+                    start: Point::new(0.0, 0.0),
+                    end: Point::new(1.0, 1.0),
+                },
+                Attributes::on_layer(LayerId::DEFAULT),
+            )],
+            dynamic: None,
+        });
+        let root_id = doc.allocate_block_id();
+        let root = Arc::new(BlockDef {
+            id: root_id,
+            name: "base".to_owned(),
+            base: Point::new(0.0, 0.0),
+            description: String::new(),
+            unit: InsertUnits::from_code(4).expect("millimetres"),
+            entities: vec![
+                BlockEntity::new(
+                    BlockObjectId(0),
+                    Entity::Circle {
+                        center: Point::new(2.0, 0.0),
+                        radius: 1.0,
+                    },
+                    Attributes::on_layer(walls),
+                ),
+                BlockEntity::new(
+                    BlockObjectId(1),
+                    Entity::Insert(Box::new(Insert::new(local.clone(), Point::new(3.0, 0.0)))),
+                    Attributes::on_layer(LayerId::DEFAULT),
+                ),
+            ],
+            dynamic: None,
+        });
+        doc.push_block(root.clone());
+        doc.set_xrefs(vec![XrefDef {
+            block: root_id,
+            path: "base.dwg".to_owned(),
+            path_type: XrefPathType::Relative,
+            kind: XrefKind::Overlay,
+            unloaded: false,
+            stamp: Some(XrefStamp {
+                length: 120,
+                modified: 1_760_000_000,
+            }),
+            layers: vec![XrefLayer {
+                source: "Walls".to_owned(),
+                layer: walls,
+            }],
+            blocks: vec![local],
+            clip: Some(opendraft_core::XrefClip::new(vec![
+                Point::new(-1.0, -1.0),
+                Point::new(4.0, -1.0),
+                Point::new(4.0, 2.0),
+                Point::new(-1.0, 2.0),
+            ])),
+            report: XrefReport {
+                model_entities: 2,
+                local_blocks: 1,
+                skipped: BTreeMap::from([("MTEXT".to_owned(), 2)]),
+                notes: vec!["laid out in metres".to_owned()],
+            },
+        }]);
+        doc.set_insert_base(Point::new(1.5, -2.0));
+        doc.set_visretain(false);
+        doc.set_xclip_frame(0);
+        doc.add(Entity::Insert(Box::new(Insert::new_xref(
+            root,
+            Point::new(10.0, 0.0),
+        ))));
+        doc
+    }
+
+    #[test]
+    fn an_xref_snapshot_round_trips_with_its_local_blocks_and_metadata() {
+        let document = xref_drawing();
+        assert_eq!(document.validate(), Ok(()));
+        let read = NativeFormat
+            .read(&NativeFormat.write(&document).unwrap().bytes)
+            .unwrap()
+            .document;
+        assert_eq!(read, document);
+        assert_eq!(read.xrefs().len(), 1);
+        assert_eq!(read.xrefs()[0].kind, opendraft_core::XrefKind::Overlay);
+        assert!(!read.visretain());
+        assert_eq!(read.insert_base(), Point::new(1.5, -2.0));
+        assert_eq!(read.xrefs()[0].blocks.len(), 1);
+        let clip = read.xrefs()[0]
+            .clip
+            .as_ref()
+            .expect("the clip boundary came back");
+        assert!(clip.enabled);
+        assert_eq!(clip.boundary[2], Point::new(4.0, 2.0));
+        assert_eq!(read.xclip_frame(), 0);
+    }
+
+    #[test]
+    fn a_saved_reference_needs_its_root_and_its_local_blocks() {
+        use serde_json::json;
+
+        let document = xref_drawing();
+        let bytes = NativeFormat.write(&document).unwrap().bytes;
+        let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+        let mut missing_root = value.clone();
+        missing_root["drawing"]["xrefs"][0]["block"] = json!(99);
+        let text = serde_json::to_vec(&missing_root).unwrap();
+        assert!(matches!(
+            NativeFormat.read(&text),
+            Err(FileError::Invalid(_))
+        ));
+
+        let mut missing_local = value;
+        missing_local["drawing"]["xrefs"][0]["blocks"] = json!([]);
+        let text = serde_json::to_vec(&missing_local).unwrap();
+        assert!(matches!(
+            NativeFormat.read(&text),
+            Err(FileError::Invalid(_))
+        ));
     }
 }

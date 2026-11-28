@@ -183,6 +183,10 @@ pub struct Insert {
     /// The values this insert overrides, or `None` for the definition's
     /// defaults. Only a block with a dynamic schema may have it.
     pub dynamic: Option<Box<DynamicInstanceState>>,
+    /// True when `block` is an external reference's root. The root's own
+    /// layer-0 objects then keep the host's layer 0 instead of inheriting
+    /// the insert's layer, as AutoCAD's xref layer-0 rule says.
+    pub is_xref: bool,
 }
 
 impl Insert {
@@ -196,6 +200,21 @@ impl Insert {
             rotation: 0.0,
             attributes: Vec::new(),
             dynamic: None,
+            is_xref: false,
+        }
+    }
+
+    /// An insert of an external reference's root `block` at `insertion`.
+    pub fn new_xref(block: Arc<BlockDef>, insertion: Point) -> Self {
+        Self {
+            block,
+            insertion,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            rotation: 0.0,
+            attributes: Vec::new(),
+            dynamic: None,
+            is_xref: true,
         }
     }
 

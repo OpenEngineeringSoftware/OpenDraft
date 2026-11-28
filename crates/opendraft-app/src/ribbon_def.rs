@@ -152,6 +152,19 @@ fn insert() -> Tab {
                 ..Default::default()
             },
             Panel {
+                title: "Reference",
+                columns: vec![
+                    Column::Large(Item::new("xref.attach", "Attach", icons::BLOCK_INSERT)),
+                    Column::Large(Item::new("xref.clip", "Clip", icons::BLOCK_EDIT)),
+                    Column::Large(Item::new(
+                        "xref.palette",
+                        "External References",
+                        icons::BLOCK_LIBRARY,
+                    )),
+                ],
+                ..Default::default()
+            },
+            Panel {
                 title: "Attributes",
                 columns: vec![
                     Column::Large(Item::new(

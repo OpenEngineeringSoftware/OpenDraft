@@ -88,7 +88,10 @@ More in `docs/ARCHITECTURE.md`, "Hatches".
 - Fields (built: Date, Filename, Object and the six `DWGPROPS` summary fields, through `FIELD`, the text editor and `-FIELD`): CreateDate, SaveDate, LastSavedBy, PlotDate, file size and custom document properties; document properties in DXF and DWG (neither is read or written); DXF `FIELD` objects; fields refreshed inside nested blocks; fields in dimension and multileader text; `FIELDDISPLAY`.
 - Attributes and blocks in DXF are checked with ezdxf only, not AutoCAD.
 - Picture cache for block references (not worth it on the evidence so far: see `docs/ARCHITECTURE.md`).
-- External references (xrefs).
+- External references, clipping: inverted clips; text, hatch, dimension and leader objects that cross a boundary are kept whole, not trimmed.
+- External references, loading: nested xrefs (attach/overlay rules, cycle detection by canonical path); demand loading (`XLOADCTL`/`XLOADPATH`); notification and fade (`XREFNOTIFY`, `XDWGFADECTL`); URL/network paths; renaming a reference (a reload refuses a changed name).
+- External references, binding: Bind refuses a snapshot holding a hatch, construction line or ray (a host block cannot hold them), a clipped reference and an unloaded one. Dimension and multileader styles are not bound; dependent text styles and linetypes are found by their `<xref>|` prefix, not recorded on the reference.
+- External references, records and files: a cross-drawing clipboard of a reference (refused, not flattened); xref-dependent dimension and multileader style records as first-class tables; DWG layer xref flags. A reference opened from DXF or DWG shows "Not loaded" until it is reloaded.
 
 ## Layers, linetypes and properties
 
@@ -206,6 +209,7 @@ Open: whether the palette and the window share one thumbnail cache; whether a `.
 
 Built and covered by tests, but not yet seen working where it matters. Take a line off when it has been checked, and say what was tried in the pull request.
 
+- **External references:** covered by unit tests; not clicked through in the running app (`XATTACH` and `-XREF`, the Attach dialog, save and reopen as `.odraft`, DXF export and re-import, DWG import, reload after the source changes, detach, bind, XCLIP and the palette), not opened in AutoCAD (block flags 4 and 8, layer flags 16 and 32, `$INSBASE`, `$VISRETAIN`, `SPATIAL_FILTER`), and the background read has not met a large real drawing or a slow network path. Linux paths with backslashes saved on Windows were tested only as strings.
 - **Associative arrays:** the record, its file round trip, ARRAYEDIT and the undo of it are covered by unit tests; not tried in the running app or compared with AutoCAD's prompts (ARRAYEDIT here repeats the options of the command that made the array, not AutoCAD's grip menu), and not with a reference DXF or DWG of AutoCAD's own arrays.
 - **Spline Break, Trim and Join:** the cut is checked exactly (both pieces follow the curve to 1e-9); how it feels (which piece Trim removes near a crest, a crossing found along segments) was not tried in the running app, nor compared with AutoCAD.
 - **Fillet next to arcs, polyline widths through Fillet and Chamfer, object isolation, and PEDIT's Fit, Spline and spline conversion:** covered by unit tests; not tried in the running app or compared with AutoCAD (Fit's biarc and tangents, Spline's uniform cubic B-spline with eight segments a span, the precision scale of the conversion, and what Isolate does to selected and snapped objects are all from memory).

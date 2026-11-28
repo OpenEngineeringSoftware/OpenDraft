@@ -15,6 +15,7 @@ use opendraft_core::aci::aci_rgb;
 mod attribute;
 mod basic;
 mod blocks;
+mod clips;
 mod dimension;
 pub(super) mod dynamic;
 mod ellipse;
@@ -32,6 +33,7 @@ mod polyline;
 mod spline;
 mod text;
 mod ucs;
+mod warnings;
 
 /// One group: a code and its value.
 #[derive(Clone)]
@@ -166,6 +168,12 @@ struct Importer {
     dim_styles: dimension::Styles,
     /// Coordinate systems left out as 3D or mirrored.
     tilted_ccs: usize,
+    /// `SPATIAL_FILTER` objects (XCLIP boundaries) that could not be kept.
+    clipped: usize,
+    /// The clip boundaries the OBJECTS section holds, by handle.
+    clips: clips::Filters,
+    /// Inserts whose extension dictionary may name a clip boundary.
+    clip_inserts: Vec<(opendraft_core::EntityId, String)>,
 }
 
 impl Importer {
@@ -291,36 +299,6 @@ impl Importer {
     fn skip(&mut self, name: &str) {
         *self.skipped.entry(name.to_owned()).or_insert(0) += 1;
     }
-
-    fn warnings(&self) -> Vec<String> {
-        let mut warnings = self.ltypes.warnings();
-        if !self.skipped.is_empty() {
-            let total: usize = self.skipped.values().sum();
-            let kinds: Vec<String> = self
-                .skipped
-                .iter()
-                .map(|(k, n)| format!("{n} {k}"))
-                .collect();
-            warnings.push(format!(
-                "Skipped {total} unsupported object{}: {}.",
-                if total == 1 { "" } else { "s" },
-                kinds.join(", ")
-            ));
-        }
-        if self.paper_space > 0 {
-            warnings.push(format!("Skipped {} paper space objects.", self.paper_space));
-        }
-        if self.invisible > 0 {
-            let objects = crate::plural(self.invisible as u64, "object");
-            warnings.push(format!("Skipped {objects} marked invisible."));
-        }
-        if self.damaged > 0 {
-            warnings.push(format!("Skipped {} damaged objects.", self.damaged));
-        }
-        warnings.extend(self.blocks.warnings());
-        warnings.extend(super::ccs::warning(self.tilted_ccs));
-        warnings
-    }
 }
 
 /// The base point (`$INSBASE`) and OpenDraft's block marker of a DXF; an
@@ -371,6 +349,7 @@ pub fn read(bytes: &[u8]) -> Result<Loaded, FileError> {
         return Err(FileError::Unreadable("not a DXF file".into()));
     }
     let mut importer = Importer::new();
+    importer.clips = clips::scan(&records);
     let mut spaces = layouts::Spaces::scan(&records, &mut importer.document);
     importer.scan_styles(&records);
     importer.scan_dynamic(&records);
@@ -402,6 +381,7 @@ pub fn read(bytes: &[u8]) -> Result<Loaded, FileError> {
             "LAYER" | "LTYPE" | "BLOCK_RECORD" | "UCS" => {
                 importer.table_record(record, &section, &table);
             }
+            "SPATIAL_FILTER" if section == "OBJECTS" => importer.clipped += 1,
             _ if section != "ENTITIES"
                 && !(section == "BLOCKS" && spaces.is_sheet_block(&block)) => {}
             "VERTEX" | "SEQEND" => importer.shape(record, &mut open_polyline),
@@ -430,6 +410,7 @@ pub fn read(bytes: &[u8]) -> Result<Loaded, FileError> {
     importer.resolve_hatch_sources();
     importer.resolve_leaders();
     importer.resolve_linetypes();
+    importer.apply_clips();
     let mut warnings = importer.warnings();
     warnings.extend(spaces.warnings());
     spaces.finish(&mut importer);
@@ -976,5 +957,39 @@ mod tests {
             .layers()
             .iter()
             .any(|l| l.name == "Caf\u{e9}"));
+    }
+
+    #[test]
+    fn a_clip_boundary_is_reported_as_imported_unclipped() {
+        let bytes = dxf(&[
+            (0, "SECTION"),
+            (2, "ENTITIES"),
+            (0, "ENDSEC"),
+            (0, "SECTION"),
+            (2, "OBJECTS"),
+            (0, "SPATIAL_FILTER"),
+            (5, "2F"),
+            (70, "2"),
+            (10, "0"),
+            (20, "0"),
+            (10, "4"),
+            (20, "0"),
+            (10, "4"),
+            (20, "3"),
+            (10, "0"),
+            (20, "3"),
+            (0, "ENDSEC"),
+            (0, "EOF"),
+        ]);
+        let loaded = read(&bytes).unwrap();
+        assert!(loaded.document.objects().is_empty());
+        assert!(
+            loaded
+                .warnings
+                .iter()
+                .any(|w| w.contains("clip boundary") && w.contains("unclipped")),
+            "{:?}",
+            loaded.warnings
+        );
     }
 }

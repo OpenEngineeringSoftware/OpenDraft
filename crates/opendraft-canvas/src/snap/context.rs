@@ -98,9 +98,18 @@ enum Drawn {
 }
 
 impl Drawn {
-    fn of(object: &Object) -> Option<Drawn> {
+    fn of(document: Option<&opendraft_core::Document>, object: &Object) -> Option<Drawn> {
         match &object.entity {
-            Entity::Insert(i) => Some(Drawn::Block(i.picture())),
+            Entity::Insert(i) => {
+                if let Some(document) = document.filter(|document| document.insert_is_clipped(i)) {
+                    let pieces = document.insert_pieces(object).unwrap_or_default();
+                    Some(Drawn::Block(
+                        pieces.into_iter().map(|piece| piece.entity).collect(),
+                    ))
+                } else {
+                    Some(Drawn::Block(i.picture()))
+                }
+            }
             Entity::Dimension(_) | Entity::MLeader(_) | Entity::Leader(_) => {
                 object.dimension_picture().map(Drawn::Dimension)
             }
@@ -156,10 +165,10 @@ pub(super) struct Scene<'a> {
 }
 
 impl<'a> Scene<'a> {
-    pub fn new(near: &'a [&'a Object]) -> Self {
+    pub fn new(document: Option<&opendraft_core::Document>, near: &'a [&'a Object]) -> Self {
         Self {
             near,
-            drawn: near.iter().map(|o| Drawn::of(o)).collect(),
+            drawn: near.iter().map(|o| Drawn::of(document, o)).collect(),
         }
     }
 

@@ -32,6 +32,8 @@ pub struct Changes {
     pub point_style: bool,
     /// A custom coordinate system, or the list saved by name, changed.
     pub ccs: bool,
+    /// The external-reference table or `VISRETAIN` changed.
+    pub xrefs: bool,
 }
 
 impl Changes {
@@ -140,6 +142,13 @@ impl Changes {
         }
     }
 
+    pub fn xrefs() -> Self {
+        Self {
+            xrefs: true,
+            ..Self::default()
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.added.is_empty()
             && self.removed.is_empty()
@@ -155,6 +164,7 @@ impl Changes {
             && !self.mleader_styles
             && !self.point_style
             && !self.ccs
+            && !self.xrefs
     }
 
     /// The combined report for changes made one after another. An object
@@ -177,6 +187,7 @@ impl Changes {
             all.mleader_styles |= part.mleader_styles;
             all.point_style |= part.point_style;
             all.ccs |= part.ccs;
+            all.xrefs |= part.xrefs;
         }
         let removed: HashSet<EntityId> = all.removed.iter().copied().collect();
         let cancelled: HashSet<EntityId> = all

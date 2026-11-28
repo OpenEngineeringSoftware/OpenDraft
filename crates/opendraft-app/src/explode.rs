@@ -23,9 +23,14 @@ use opendraft_commands::Wording;
 /// Other objects are left alone. One undo step.
 pub fn explode_objects(ed: &mut Editor) -> Result<(), Cancelled> {
     let chosen = ed.pickset_or_select(key!("Select objects to explode"))?;
-    let (found, filled) = ed.read(move |doc| {
+    let (found, filled, refused) = ed.read(move |doc| {
+        let refused = chosen
+            .iter()
+            .filter(|id| doc.xref_for_object(**id).is_some())
+            .count();
         let found = chosen
             .iter()
+            .filter(|id| doc.xref_for_object(**id).is_none())
             .filter_map(|id| doc.object(*id).map(|o| (*id, parts_of(doc, o))))
             .collect::<Vec<_>>();
         let filled = chosen
@@ -33,7 +38,7 @@ pub fn explode_objects(ed: &mut Editor) -> Result<(), Cancelled> {
             .filter_map(|id| doc.object(*id))
             .filter(|o| matches!(&o.entity, Entity::Hatch(h) if !is_pattern(h)))
             .count();
-        (found, filled)
+        (found, filled, refused)
     })?;
     let mut gone = Vec::new();
     let mut parts: Vec<(Entity, Attributes)> = Vec::new();
@@ -45,7 +50,12 @@ pub fn explode_objects(ed: &mut Editor) -> Result<(), Cancelled> {
     if filled > 0 {
         ed.say(key!("Solid and gradient hatches cannot be exploded yet."));
     }
-    if gone.is_empty() && filled > 0 {
+    if refused > 0 {
+        ed.say(key!(
+            "An external reference cannot be exploded; detach it or edit the source drawing."
+        ));
+    }
+    if gone.is_empty() && (filled > 0 || refused > 0) {
         return Ok(());
     }
     if gone.is_empty() {

@@ -12,7 +12,7 @@ use crate::linetype::{LinetypeId, LinetypeTable};
 use crate::mleader::{MLeaderStyle, MLeaderStyleId};
 use crate::text_style::{TextStyle, TextStyleId};
 use crate::units::Units;
-use crate::{Entity, PointStyle};
+use crate::{Entity, Point, PointStyle};
 
 /// Permanent identity of an object. Ids are never reused within a drawing,
 /// so selections, undo records and (later) files and plugins can hold them
@@ -102,6 +102,16 @@ pub struct Document {
     /// Block definitions, shared with the inserts that place them.
     blocks: Vec<Arc<BlockDef>>,
     next_block_id: u64,
+    /// External references, keyed by root block id. One record per root.
+    xrefs: Vec<crate::XrefDef>,
+    /// The drawing's `INSBASE`: the point an insert puts at its insertion
+    /// point. Zero unless a file or BASE sets it.
+    insert_base: Point,
+    /// `VISRETAIN`: keep host xref-layer properties on reload (true, the
+    /// AutoCAD initial value) or take the source's again (false).
+    visretain: bool,
+    /// `XCLIPFRAME`: 0 hides clip frames, 1 draws them, 2 draws and plots them.
+    xclip_frame: u8,
     /// Only ever `Some` in a Block Editor's drawing: the dynamic schema being
     /// authored. It is not drawing data: no file holds it, `validate` does not
     /// look at it, `clone_tables` leaves it behind, and BSAVE turns it into
@@ -128,6 +138,7 @@ pub struct Document {
 
 mod arrays;
 mod attributes;
+mod bind;
 mod blocks;
 mod ccs;
 mod defaults;
@@ -136,6 +147,10 @@ mod layouts;
 mod leaders;
 mod linetypes;
 pub use linetypes::LinetypeUse;
+#[cfg(test)]
+mod bind_tests;
+#[cfg(test)]
+mod clip_tests;
 mod mleader_styles;
 mod modify_settings;
 mod object;
@@ -154,6 +169,10 @@ mod spatial_query;
 mod spatial_tests;
 mod text_styles;
 mod transplant;
+#[cfg(test)]
+mod xref_tests;
+mod xref_validate;
+mod xrefs;
 
 pub use object::Object;
 pub use spatial::SpatialStats;

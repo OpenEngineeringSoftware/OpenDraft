@@ -5,9 +5,17 @@ use std::collections::BTreeSet;
 
 use opendraft_core::Document;
 
-use super::{block_name, hex, true_color, weight_code, Handles, Ids};
+use super::{hex, true_color, weight_code, Handles, Ids};
 use crate::dxf::model_freeze;
 use crate::dxf::write::{aci_for, dxf_name, Out};
+
+/// `*Paper_Space`, `*Paper_Space0`, `*Paper_Space1`... by tab position.
+pub(super) fn block_name(index: usize) -> String {
+    match index {
+        0 => "*Paper_Space".to_owned(),
+        n => format!("*Paper_Space{}", n - 1),
+    }
+}
 
 pub(super) fn write_tables(
     out: &mut Out,
@@ -99,8 +107,17 @@ pub(super) fn write_tables(
         let handle = ids.layers[&layer.id];
         let (index, _) = aci_for(layer.color);
         record(out, "LAYER", owner, "AcDbLayerTableRecord", handle);
-        out.pair(2, dxf_name(&layer.name));
-        out.pair(70, i32::from(layer.frozen) + 4 * i32::from(layer.locked));
+        out.pair(2, crate::dxf::write::dxf_layer_name(document, layer));
+        // Frozen, locked, and (for a bound layer) externally dependent and
+        // resolved when its reference is loaded.
+        let mut flags = i32::from(layer.frozen) + 4 * i32::from(layer.locked);
+        if let Some(owner) = document.xref_layer_owner(layer.id) {
+            flags |= 16;
+            if document.xref(owner).is_some_and(|xref| !xref.unloaded) {
+                flags |= 32;
+            }
+        }
+        out.pair(70, flags);
         out.pair(62, if layer.on { index } else { -index });
         if let Some(rgb) = true_color(layer.color) {
             out.pair(420, rgb);

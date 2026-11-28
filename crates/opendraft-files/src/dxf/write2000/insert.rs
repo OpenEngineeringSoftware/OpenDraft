@@ -14,7 +14,7 @@ use opendraft_core::block::{
 use opendraft_core::{Document, EntityId, Insert, Object};
 
 use super::entities::entity_head;
-use super::{Handles, Ids};
+use super::{hex, Handles, Ids};
 use crate::dxf::write::{dxf_name, finite, Out};
 use crate::FileError;
 
@@ -143,6 +143,11 @@ pub(super) fn insert(
     out.pair(43, 1.0);
     if insert.rotation != 0.0 {
         out.pair(50, finite(arc::normalize(insert.rotation).to_degrees())?);
+    }
+    if let Some(handles) = ids.clip_handles(object.id) {
+        out.pair(102, "{ACAD_XDICTIONARY");
+        out.pair(360, hex(handles.dictionary));
+        out.pair(102, "}");
     }
     if insert.attributes.is_empty() {
         return Ok(());

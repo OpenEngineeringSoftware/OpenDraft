@@ -140,6 +140,10 @@ pub(crate) struct BlockData {
     /// block's picture, not a block the user named.
     pub anonymous: bool,
     pub is_xref: bool,
+    /// An overlaid reference (not included when the host is itself xrefed).
+    pub overlaid: bool,
+    /// The saved path (group 1); empty when the file has none.
+    pub path: String,
     /// The point an insert puts at its insertion point.
     pub base: [f64; 3],
     pub description: String,
@@ -167,8 +171,8 @@ pub(crate) fn read_block_header(
                    // An xref owns no entities, and the count is not stored for one.
     let owned = if is_xref || overlaid { 0 } else { s.data.bl()? };
     let base_point = s.data.bd3()?;
-    s.strings.text(text_limit)?; // xref path
-                                 // One non-zero byte per insert, ended by a zero byte.
+    let path = s.strings.text(text_limit)?;
+    // One non-zero byte per insert, ended by a zero byte.
     let mut inserts = 0u64;
     while s.data.rc()? != 0 {
         inserts += 1;
@@ -218,6 +222,8 @@ pub(crate) fn read_block_header(
         name,
         anonymous,
         is_xref,
+        overlaid,
+        path,
         base: base_point,
         description,
         entities,
@@ -351,8 +357,30 @@ mod tests {
         handles.handle(4, 0x22);
         let b = Buffers::new(&data, &strings, &handles);
         let block = read_block_header(&mut b.streams(), BASE, &DwgLimits::default()).unwrap();
-        assert!(block.is_xref && block.entities.is_empty());
+        assert!(block.is_xref && !block.overlaid && block.entities.is_empty());
+        assert_eq!(block.path, "..\\Sketch.dwg");
         assert_eq!(block.layout, Some(DwgHandle(0x22)));
+    }
+
+    #[test]
+    fn an_overlaid_xref_keeps_its_overlay_bit_and_path() {
+        let mut data = BitWriter::new();
+        data.bs(0)
+            .bit(false)
+            .bit(false)
+            .bit(true)
+            .bit(true)
+            .bit(true);
+        data.bd3([0.0; 3]).rc(0).bl(0).bs(0).bit(true).rc(1);
+        let mut strings = BitWriter::new();
+        strings.text("Overlay").text("Site.dwg").text("");
+        let mut handles = BitWriter::new();
+        handles.handle(5, 0).handle(3, 0x20).handle(3, 0x21);
+        handles.handle(4, 0x22);
+        let b = Buffers::new(&data, &strings, &handles);
+        let block = read_block_header(&mut b.streams(), BASE, &DwgLimits::default()).unwrap();
+        assert!(block.is_xref && block.overlaid && block.entities.is_empty());
+        assert_eq!(block.path, "Site.dwg");
     }
 
     #[test]

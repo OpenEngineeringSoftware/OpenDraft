@@ -14,6 +14,8 @@ const SETTLE: Duration = Duration::from_millis(100);
 impl AppState {
     /// Cancel `runner`, letting what it keeps go into the drawing it ran in.
     pub(crate) fn settle_cancelled(&mut self, runner: &mut Runner) {
+        // A read for the command (an external reference's source) goes too.
+        self.cancel_xref_job();
         match self.docs.get_mut(self.run_doc) {
             Some(doc) => runner.cancel_and_settle(&mut doc.session, SETTLE),
             None => runner.cancel(),

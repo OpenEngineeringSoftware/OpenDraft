@@ -36,6 +36,43 @@ pub enum LayoutPaper {
     Dark,
 }
 
+/// The saved-path form a new external reference starts with (`REFPATHTYPE`),
+/// numbered as AutoCAD does: 0 no path, 1 relative, 2 full.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RefPathDefault {
+    NoPath,
+    #[default]
+    Relative,
+    Full,
+}
+
+impl RefPathDefault {
+    pub fn code(self) -> i64 {
+        match self {
+            Self::NoPath => 0,
+            Self::Relative => 1,
+            Self::Full => 2,
+        }
+    }
+
+    pub fn from_code(code: i64) -> Self {
+        match code {
+            0 => Self::NoPath,
+            2 => Self::Full,
+            _ => Self::Relative,
+        }
+    }
+
+    pub fn to_core(self) -> opendraft_core::XrefPathType {
+        match self {
+            Self::NoPath => opendraft_core::XrefPathType::NoPath,
+            Self::Relative => opendraft_core::XrefPathType::Relative,
+            Self::Full => opendraft_core::XrefPathType::Full,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -113,6 +150,15 @@ pub struct Settings {
     /// The interface language (a code of `language::LANGUAGES`); `None`
     /// follows the system's.
     pub language: Option<String>,
+    /// What a new external reference defaults to (`XREFTYPE`): attached, or
+    /// overlaid when true.
+    pub xref_overlay: bool,
+    /// The saved path form a new external reference defaults to
+    /// (`REFPATHTYPE`).
+    pub ref_path_type: RefPathDefault,
+    /// Bind names dependent symbols bare and merges layers (`BINDTYPE` 1);
+    /// false prefixes them with `$0$`.
+    pub bind_insert: bool,
 }
 
 impl Default for Settings {
@@ -152,6 +198,9 @@ impl Default for Settings {
             update_checks: None,
             performance: Default::default(),
             language: None,
+            xref_overlay: false,
+            ref_path_type: RefPathDefault::default(),
+            bind_insert: false,
         }
     }
 }
@@ -438,6 +487,9 @@ mod tests {
                 show_frame_time: true,
             },
             language: Some("fr".into()),
+            xref_overlay: true,
+            ref_path_type: RefPathDefault::Full,
+            bind_insert: true,
         };
         settings.save(&mut storage);
         assert_eq!(Settings::load(Some(&storage)), settings);

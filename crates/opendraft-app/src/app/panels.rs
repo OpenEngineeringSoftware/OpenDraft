@@ -12,6 +12,8 @@ use crate::canvas_style;
 use crate::dock::{self, PanelTab};
 use crate::state::AppState;
 
+mod xref_panel;
+
 impl OpenDraftApp {
     /// The dock area: the drawing view and the side panels as tabs.
     pub(super) fn panels(&mut self, ctx: &egui::Context) {
@@ -259,6 +261,7 @@ impl egui_dock::TabViewer for PanelViewer<'_> {
             PanelTab::Canvas => self.drawing(ui),
             PanelTab::Properties => self.properties(ui),
             PanelTab::Layers => self.layers(ui),
+            PanelTab::Xrefs => self.xrefs(ui),
             PanelTab::CommandLine => self.command_line(ui),
             PanelTab::Assistant => crate::assistant::show_panel(
                 ui,

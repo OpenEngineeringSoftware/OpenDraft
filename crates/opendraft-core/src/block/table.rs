@@ -59,6 +59,11 @@ impl BlockDef {
     }
 }
 
+/// Why an external reference's root block keeps its name and unit: its
+/// bound layers are named after it and its source sets the unit.
+const XREF_BLOCK_FIXED: &str =
+    "An external reference's name and unit come from its reference; detach it to change them.";
+
 /// What redefining a block changes: the new block table, and the objects
 /// whose inserts now point at new records.
 #[derive(Clone, Debug)]
@@ -74,20 +79,23 @@ impl Document {
     /// itself, which would nest it forever.
     pub fn redefined_blocks(&self, def: BlockDef) -> Result<Redefinition, &'static str> {
         let target = def.id;
+        let is_xref = self.is_xref_block(target);
         // The strokes of a pattern would have to be drawn and moved with the
-        // block; that is not built.
-        if def
-            .entities
-            .iter()
-            .any(|e| matches!(e.entity, Entity::Hatch(_)))
+        // block; that is not built. Xref content may hold them.
+        if !is_xref
+            && def
+                .entities
+                .iter()
+                .any(|e| matches!(e.entity, Entity::Hatch(_)))
         {
             return Err(key!("A block cannot hold a hatch yet."));
         }
         // They have no ends to give the block a size.
-        if def
-            .entities
-            .iter()
-            .any(|e| matches!(e.entity, Entity::Xline { .. } | Entity::Ray { .. }))
+        if !is_xref
+            && def
+                .entities
+                .iter()
+                .any(|e| matches!(e.entity, Entity::Xline { .. } | Entity::Ray { .. }))
         {
             return Err(key!("A block cannot hold a construction line or a ray."));
         }
@@ -136,6 +144,9 @@ impl Document {
         let Some(old) = self.block(id) else {
             return Err("That block is no longer in the drawing.".to_owned());
         };
+        if self.is_xref_block(id) {
+            return Err(XREF_BLOCK_FIXED.to_owned());
+        }
         if let Some(problem) = block_name_problem(name) {
             return Err(problem.to_owned());
         }
@@ -159,6 +170,9 @@ impl Document {
         let Some(old) = self.block(id) else {
             return Err("That block is no longer in the drawing.".to_owned());
         };
+        if self.is_xref_block(id) {
+            return Err(XREF_BLOCK_FIXED.to_owned());
+        }
         let mut def = (**old).clone();
         def.unit = unit;
         self.redefined_blocks(def).map_err(str::to_owned)
@@ -206,6 +220,7 @@ impl Document {
             if block.id.0 >= self.next_block_id() {
                 return Err(DocumentError::CounterBehind);
             }
+            let xref = self.xref(block.id);
             let mut object_ids = HashSet::new();
             for child in &block.entities {
                 if !object_ids.insert(child.id) {
@@ -213,11 +228,22 @@ impl Document {
                 }
                 let layer_ok = self.layer(child.attrs.layer).is_some();
                 let shape_ok = match &child.entity {
-                    Entity::Insert(i) => {
-                        i.block.id != block.id
-                            && self.is_current(i)
-                            && (i.dynamic.is_none() || i.block.dynamic.is_some())
-                    }
+                    Entity::Insert(i) => match xref {
+                        // Xref content refers to the record's own local
+                        // definitions, never to the host's block table.
+                        Some(x) => {
+                            !i.is_xref
+                                && i.is_valid()
+                                && (i.dynamic.is_none() || i.block.dynamic.is_some())
+                                && (x.owns_block(i.block.id)
+                                    || (!self.is_xref_block(i.block.id) && self.is_current(i)))
+                        }
+                        None => {
+                            i.block.id != block.id
+                                && self.is_current(i)
+                                && (i.dynamic.is_none() || i.block.dynamic.is_some())
+                        }
+                    },
                     Entity::Ellipse(e) => e.validate().is_ok(),
                     Entity::Spline(s) => s.validate().is_ok(),
                     Entity::Polyline {
@@ -226,9 +252,10 @@ impl Document {
                         widths,
                         ..
                     } => crate::polyline::check(points, bulges, widths).is_ok(),
-                    // A block cannot hold a hatch: the strokes of a pattern
-                    // would have to be drawn and moved with it.
-                    Entity::Hatch(_) | Entity::Xline { .. } | Entity::Ray { .. } => false,
+                    // A host block cannot hold a hatch, a construction line or
+                    // a ray: the strokes or an infinite extent would have to be
+                    // drawn and moved with the block. Xref content may.
+                    Entity::Hatch(_) | Entity::Xline { .. } | Entity::Ray { .. } => xref.is_some(),
                     _ => true,
                 };
                 if !layer_ok || !shape_ok {

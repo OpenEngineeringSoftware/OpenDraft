@@ -54,6 +54,7 @@ mod dialog_asks;
 mod modify_settings;
 mod steps;
 mod sweep_ask;
+mod xref_asks;
 
 pub use dialog_asks::{AttributeEditorAnswer, FieldAnswer};
 

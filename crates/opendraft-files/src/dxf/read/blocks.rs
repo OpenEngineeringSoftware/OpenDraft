@@ -20,10 +20,15 @@ use super::polyline::Vertex;
 use super::{decode, Importer, Record};
 use crate::block_import::{self, ImportedBlocks, Item, PendingBlock, PendingInsert};
 
-/// Why a block in the file is not read.
-#[derive(Clone, Copy)]
-enum Unread {
-    External,
+/// A block in the file that is an external reference's root: its path and
+/// kind, kept for the reference record built after the blocks.
+#[derive(Clone, Debug)]
+pub(super) struct PendingXref {
+    pub key: String,
+    pub name: String,
+    pub path: String,
+    pub kind: opendraft_core::XrefKind,
+    pub unit: opendraft_core::InsertUnits,
 }
 
 /// The importer's block state.
@@ -39,11 +44,12 @@ pub(super) struct BlockReading {
     /// What the file's dynamic blocks come to.
     plan: Plan,
     built: ImportedBlocks<String>,
-    /// Blocks in the file that are not read, by lower-cased name.
-    unread: HashMap<String, Unread>,
     /// References to anonymous blocks, which were imported as ordinary blocks.
     anonymous_references: u64,
-    external_references: u64,
+    /// External references in the file, by their block header.
+    pub(super) xrefs: Vec<PendingXref>,
+    /// Layers the file marks as dependent on a reference (flags 16).
+    pub(super) dependent_layers: std::collections::HashSet<u64>,
     /// The block table's insert units, by lower-cased name.
     units: HashMap<String, opendraft_core::InsertUnits>,
     /// Inserts waiting for their attributes.
@@ -84,8 +90,8 @@ impl BlockReading {
                 self.anonymous_references,
             ));
         }
-        if self.external_references > 0 {
-            out.push(block_import::external_references(self.external_references));
+        if !self.xrefs.is_empty() {
+            out.push(block_import::external_references(self.xrefs.len() as u64));
         }
         out
     }
@@ -129,7 +135,17 @@ impl Importer {
                     if is_space(&name, spaces) {
                         continue;
                     } else if flags & (4 | 8) != 0 {
-                        self.blocks.unread.insert(key, Unread::External);
+                        self.blocks.xrefs.push(PendingXref {
+                            key: key.clone(),
+                            name: name.clone(),
+                            path: decode(record.text(1).unwrap_or("")),
+                            kind: if flags & 8 != 0 {
+                                opendraft_core::XrefKind::Overlay
+                            } else {
+                                opendraft_core::XrefKind::Attach
+                            },
+                            unit: self.blocks.units.get(&key).copied().unwrap_or_default(),
+                        });
                     } else {
                         let anonymous = flags & 1 != 0 || name.starts_with('*');
                         let unit = self.blocks.units.get(&key).copied().unwrap_or_default();
@@ -165,8 +181,66 @@ impl Importer {
             }
         }
         self.blocks.collecting = None;
-        let pending = self.keep_inserted(pending, records);
+        let mut pending = self.keep_inserted(pending, records);
+        let empty: Vec<PendingBlock<String>> = self
+            .blocks
+            .xrefs
+            .iter()
+            .map(|xref| PendingBlock {
+                key: xref.key.clone(),
+                name: xref.name.clone(),
+                base: Point::new(0.0, 0.0),
+                description: String::new(),
+                unit: xref.unit,
+                items: Vec::new(),
+                dynamic: None,
+            })
+            .collect();
+        pending.extend(empty);
         self.blocks.built = ImportedBlocks::build(&mut self.document, pending);
+        self.finish_xrefs();
+    }
+
+    /// The external references the file named: an empty root (their content
+    /// is not in this file) and the host layers bound to their source layers.
+    fn finish_xrefs(&mut self) {
+        if self.blocks.xrefs.is_empty() {
+            return;
+        }
+        let mut records = Vec::new();
+        for xref in &self.blocks.xrefs {
+            let Some(root) = self.blocks.built.block(&xref.key) else {
+                continue;
+            };
+            let prefix = format!("{}|", root.name);
+            let mut layers: Vec<opendraft_core::XrefLayer> = self
+                .document
+                .layers()
+                .iter()
+                .filter(|layer| self.blocks.dependent_layers.contains(&layer.id.0))
+                .filter_map(|layer| {
+                    let source = layer.name.strip_prefix(&prefix)?;
+                    (!source.is_empty()).then(|| opendraft_core::XrefLayer {
+                        source: source.to_owned(),
+                        layer: layer.id,
+                    })
+                })
+                .collect();
+            layers.sort_by_key(|l| l.source.to_lowercase());
+            records.push(opendraft_core::XrefDef {
+                block: root.id,
+                path: xref.path.clone(),
+                path_type: crate::xref::classify(&xref.path),
+                kind: xref.kind,
+                unloaded: true,
+                stamp: None,
+                layers,
+                blocks: Vec::new(),
+                clip: None,
+                report: opendraft_core::XrefReport::default(),
+            });
+        }
+        self.document.set_xrefs(records);
     }
 
     /// Takes the objects marked invisible out of a block, except those a
@@ -269,11 +343,10 @@ impl Importer {
             self.damaged += 1;
             return;
         }
-        let key = decode(record.text(2).unwrap_or("")).to_lowercase();
-        match self.blocks.unread.get(&key) {
-            Some(Unread::External) => self.blocks.external_references += 1,
-            None if record.int(66) == Some(1) => self.open_insert(record),
-            None => self.place_insert(record, Vec::new()),
+        if record.int(66) == Some(1) {
+            self.open_insert(record);
+        } else {
+            self.place_insert(record, Vec::new());
         }
     }
 
@@ -285,6 +358,7 @@ impl Importer {
             return;
         };
         let key = decode(record.text(2).unwrap_or("")).to_lowercase();
+        let is_xref = self.blocks.xrefs.iter().any(|xref| xref.key == key);
         let (block, dynamic) = match self.blocks.plan.instance(&key) {
             Some(m) => (m.definition.clone(), m.values.clone()),
             None => (key, Vec::new()),
@@ -297,6 +371,7 @@ impl Importer {
             rotation: record.number(50).unwrap_or(0.0).to_radians(),
             attributes,
             dynamic,
+            is_xref,
         };
         self.add_item(record, Item::Insert(insert));
     }
@@ -333,7 +408,14 @@ impl Importer {
             Item::Insert(insert) => self.blocks.built.insert(insert),
         };
         if let Some(entity) = entity {
+            let clip_dictionary = match &entity {
+                Entity::Insert(i) if i.is_xref => super::clips::extension_dictionary(record),
+                _ => None,
+            };
             let id = self.document.add_with(entity, attrs);
+            if let Some(dictionary) = clip_dictionary {
+                self.clip_inserts.push((id, dictionary));
+            }
             if let Some(handle) = record.text(5) {
                 self.handles.insert(handle.to_uppercase(), id);
             }
@@ -441,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn external_blocks_are_not_read() {
+    fn external_blocks_are_kept_as_unloaded_references() {
         let blocks = block("Site", "4", &[]);
         let refs = [
             (0, "INSERT"),
@@ -457,7 +539,15 @@ mod tests {
             (70, "2"),
         ];
         let loaded = read(&dxf(&blocks, &refs)).unwrap();
-        assert!(loaded.document.blocks().is_empty() && loaded.document.is_empty());
+        let doc = &loaded.document;
+        doc.validate().unwrap();
+        assert_eq!(doc.xrefs().len(), 1, "the reference is kept");
+        assert!(doc.block(doc.xrefs()[0].block).unwrap().entities.is_empty());
+        assert_eq!(doc.objects().len(), 1);
+        let Entity::Insert(insert) = &doc.objects()[0].entity else {
+            panic!("an xref insert");
+        };
+        assert!(insert.is_xref);
         assert_eq!(
             loaded.warnings,
             [

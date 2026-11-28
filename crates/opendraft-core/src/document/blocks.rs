@@ -4,8 +4,8 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use super::{after, Document};
-use crate::block::{BlockDef, BlockId};
-use crate::{Entity, EntityId, Object};
+use crate::block::{BlockDef, BlockId, Insert};
+use crate::{Attributes, Entity, EntityId, Object, Point};
 
 impl Document {
     /// Block definitions in table order (the order they were made).
@@ -80,11 +80,41 @@ impl Document {
         let Entity::Insert(insert) = &object.entity else {
             return None;
         };
-        let pieces = insert
+        let mut pieces: Vec<(Entity, Attributes)> = insert
             .picture_with(&object.attrs, &|l| self.layer_look(l))
             .into_iter()
-            .map(|p| Object::new(object.id, p.entity, p.attrs, object.layout));
+            .map(|p| (p.entity, p.attrs))
+            .collect();
+        // A clipped reference is cut where it is expanded, so paint, picking,
+        // snapping and plotting all see the same drawing.
+        if let Some(boundary) = self.xref_boundary(insert) {
+            pieces = pieces
+                .into_iter()
+                .flat_map(|(entity, attrs)| {
+                    crate::xref_clip::clip_entity(&entity, &boundary)
+                        .into_iter()
+                        .map(move |entity| (entity, attrs.clone()))
+                })
+                .collect();
+        }
+        let pieces = pieces
+            .into_iter()
+            .map(|(entity, attrs)| Object::new(object.id, entity, attrs, object.layout));
         Some(pieces.filter(|o| self.is_visible(o)).collect())
+    }
+
+    /// The insert's clip boundary in drawing coordinates, when it shows a
+    /// clipped external reference.
+    fn xref_boundary(&self, insert: &Insert) -> Option<Vec<Point>> {
+        let record = self.xref(insert.block.id)?;
+        let clip = record.clip.as_ref().filter(|clip| clip.enabled)?;
+        let transform = insert.transform();
+        Some(
+            clip.boundary
+                .iter()
+                .map(|point| transform.apply(*point))
+                .collect(),
+        )
     }
 
     /// The object as drawn: itself, or the pieces of a block reference
@@ -96,12 +126,24 @@ impl Document {
         }
     }
 
+    /// [`drawn`](Self::drawn) plus the clip frame of a clipped reference,
+    /// which plots when `XCLIPFRAME` is 2.
+    pub fn drawn_with_frame<'a>(&self, object: &'a Object) -> Vec<Cow<'a, Object>> {
+        let mut drawn = self.drawn(object);
+        drawn.extend(self.clip_frame(object).map(Cow::Owned));
+        drawn
+    }
+
     /// The drawing the Block Editor works on for block `id`: this drawing's
     /// tables (layers, text styles, blocks, linetypes, units, dimension style) and id
     /// counters, no layouts, and as its only objects the block's, moved so
     /// the base point is the origin, as AutoCAD's Block Editor shows it.
     /// `None` for an unknown block.
     pub fn block_editor_document(&self, id: BlockId) -> Option<Document> {
+        // An external reference is edited in its source drawing.
+        if self.is_xref_block(id) {
+            return None;
+        }
         let block = self.block(id)?.clone();
         let mut doc = Document {
             objects: Vec::new(),
@@ -137,6 +179,10 @@ impl Document {
     /// is the block's. The caller keeps the base point for `$INSBASE`. `None`
     /// for an unknown block.
     pub fn block_as_drawing(&self, id: BlockId) -> Option<Document> {
+        // Writing an external reference out as a block would flatten it.
+        if self.is_xref_block(id) {
+            return None;
+        }
         let block = self.block(id)?.clone();
         let mut doc = Document {
             objects: Vec::new(),
@@ -209,8 +255,17 @@ impl Document {
             mleader_styles: self.mleader_styles.clone(),
             next_mleader_style_id: self.next_mleader_style_id,
             current_mleader_style: self.current_mleader_style,
-            blocks: self.blocks.clone(),
+            blocks: self
+                .blocks
+                .iter()
+                .filter(|b| self.xref(b.id).is_none())
+                .cloned()
+                .collect(),
             next_block_id: self.next_block_id,
+            xrefs: Vec::new(),
+            insert_base: self.insert_base,
+            visretain: self.visretain,
+            xclip_frame: self.xclip_frame,
             block_editor_dynamic: None,
             next_attribute_definition_id: self.next_attribute_definition_id,
             linetypes: self.linetypes.clone(),

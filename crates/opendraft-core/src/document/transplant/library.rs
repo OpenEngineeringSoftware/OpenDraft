@@ -237,6 +237,7 @@ impl Document {
             rotation: placement.rotation,
             attributes,
             dynamic: None,
+            is_xref: false,
         };
         let attrs = Attributes::on_layer(self.current_layer);
         let object = Object::new(

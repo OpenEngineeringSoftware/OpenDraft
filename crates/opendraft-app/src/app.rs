@@ -50,6 +50,7 @@ mod text_style_dialog;
 mod text_style_preview;
 mod units_dialog;
 mod update_notice;
+mod xref_attach_dialog;
 
 use eframe::egui;
 use egui_dock::DockState;
@@ -394,6 +395,7 @@ impl eframe::App for OpenDraftApp {
         self.state.pump_command();
         self.update_automation(ctx);
         self.state.sync_mtext_editor();
+        self.state.sync_xref_load();
         self.handle_files_and_exit(ctx);
         self.route_typing_to_command_line(ctx);
         self.handle_shortcuts(ctx);

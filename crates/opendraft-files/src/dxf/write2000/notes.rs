@@ -57,5 +57,11 @@ pub(super) fn notes(document: &Document) -> Vec<String> {
             "Hatches were written without the objects they follow (not associative).".to_owned(),
         );
     }
+    if !document.xrefs().is_empty() {
+        notes.push(format!(
+            "{} written by name and saved path; their contents are not in this DXF, so reload them in the receiving drawing.",
+            crate::plural(document.xrefs().len() as u64, "external reference")
+        ));
+    }
     notes
 }

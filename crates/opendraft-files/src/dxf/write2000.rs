@@ -15,7 +15,9 @@ use std::collections::{BTreeSet, HashMap};
 use opendraft_core::{Attr, Color, Document, LayerId, Layout, Lineweight};
 
 mod blocks;
+mod clip;
 mod dimension;
+mod encode;
 mod entities;
 mod hatch;
 mod insert;
@@ -28,7 +30,7 @@ mod text;
 
 use entities::{write_object, write_viewports};
 use objects::write_objects;
-use tables::write_tables;
+use tables::{block_name, write_tables};
 
 use super::units::header as units_header;
 use super::write::{finite, Out};
@@ -72,14 +74,9 @@ struct Ids {
     dim_styles: Vec<u32>,
     /// The block record of each of the drawing's block definitions.
     blocks: HashMap<opendraft_core::BlockId, u32>,
-}
-
-/// `*Paper_Space`, `*Paper_Space0`, `*Paper_Space1`... by tab position.
-fn block_name(index: usize) -> String {
-    match index {
-        0 => "*Paper_Space".to_owned(),
-        n => format!("*Paper_Space{}", n - 1),
-    }
+    /// The handles of each clipped reference's insert, extension dictionary,
+    /// `ACAD_FILTER` dictionary and `SPATIAL_FILTER`.
+    clips: Vec<(opendraft_core::EntityId, clip::ClipHandles)>,
 }
 
 /// The sheets to write. AutoCAD requires `*Paper_Space` and a layout besides
@@ -93,23 +90,8 @@ fn sheets(document: &Document) -> Cow<'_, [Layout]> {
     }
 }
 
-/// The text as ASCII bytes. DXF 2000 and later keep non-ASCII characters in
-/// text as `\U+XXXX`, which reads the same whatever code page or encoding the
-/// reader assumes (2007 and later files are UTF-8, 2000's are ANSI).
-fn ascii(text: &str) -> Vec<u8> {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        if c.is_ascii() {
-            out.push(c);
-        } else {
-            let mut buffer = [0u16; 2];
-            for unit in c.encode_utf16(&mut buffer) {
-                out.push_str(&format!("\\U+{unit:04X}"));
-            }
-        }
-    }
-    out.into_bytes()
-}
+/// The text as ASCII bytes, with non-ASCII characters as `\U+XXXX`.
+use encode::ascii;
 
 /// The nearest lineweight AutoCAD accepts (hundredths of a millimetre).
 fn weight_code(weight: Lineweight) -> i32 {
@@ -161,10 +143,12 @@ pub fn write_with(document: &Document, extras: Option<&BlockExtras>) -> Result<E
         dim_blocks: HashMap::new(),
         dim_styles: document.dim_styles().iter().map(|_| h.next()).collect(),
         blocks: HashMap::new(),
+        clips: Vec::new(),
     };
     for def in document.blocks() {
         ids.blocks.insert(def.id, h.next());
     }
+    ids.clips = clip::handles(document, &mut h);
     for (id, name) in dimension::block_names(document) {
         ids.dim_blocks.insert(id, (name, h.next()));
     }
@@ -335,8 +319,19 @@ pub fn write_with(document: &Document, extras: Option<&BlockExtras>) -> Result<E
     let mut out = Out::new();
     out.section("HEADER");
     out.pair(9, "$ACADVER");
-    // Multileaders need AutoCAD 2008's file (AC1021); nothing else here does.
-    out.pair(1, if leaders { "AC1021" } else { "AC1015" });
+    // Multileaders need AutoCAD 2008's file (AC1021); a clip frame is a short
+    // (0/1/2) only from R2010 (AC1024), which also holds multileaders.
+    let has_clips = document.xrefs().iter().any(|xref| xref.clip.is_some());
+    out.pair(
+        1,
+        if has_clips {
+            "AC1024"
+        } else if leaders {
+            "AC1021"
+        } else {
+            "AC1015"
+        },
+    );
     out.pair(9, "$ACADMAINTVER");
     out.pair(70, 6);
     out.pair(9, "$DWGCODEPAGE");
@@ -349,7 +344,18 @@ pub fn write_with(document: &Document, extras: Option<&BlockExtras>) -> Result<E
     out.pair(9, "$INSBASE");
     match extras {
         Some(b) => out.point3(10, finite(b.insbase.x)?, finite(b.insbase.y)?, 0.0),
-        None => out.point3(10, 0.0, 0.0, 0.0),
+        None => out.point3(
+            10,
+            finite(document.insert_base().x)?,
+            finite(document.insert_base().y)?,
+            0.0,
+        ),
+    }
+    out.pair(9, "$VISRETAIN");
+    out.pair(70, i32::from(document.visretain()));
+    if has_clips {
+        out.pair(9, "$XCLIPFRAME");
+        out.pair(280, i32::from(document.xclip_frame()));
     }
     let (lo, hi) = match document.model_bounds() {
         Some(b) => (
@@ -398,6 +404,8 @@ fn block(
         h,
         (name, ""),
         (record, opendraft_core::Point::default()),
+        i32::from(name.starts_with("*D")),
+        "",
         body,
     )
 }
@@ -408,6 +416,8 @@ fn block_at(
     h: &mut Handles,
     (name, description): (&str, &str),
     (record, base): (u32, opendraft_core::Point),
+    flags: i32,
+    path: &str,
     mut body: impl FnMut(&mut Out, &mut Handles) -> Result<(), FileError>,
 ) -> Result<(), FileError> {
     out.pair(0, "BLOCK");
@@ -417,11 +427,10 @@ fn block_at(
     out.pair(8, 0);
     out.pair(100, "AcDbBlockBegin");
     out.pair(2, name);
-    // Dimension pictures are anonymous blocks.
-    out.pair(70, i32::from(name.starts_with("*D")));
+    out.pair(70, flags);
     out.point3(10, finite(base.x)?, finite(base.y)?, 0.0);
     out.pair(3, name);
-    out.pair(1, "");
+    out.pair(1, path);
     if !description.is_empty() {
         out.pair(4, description);
     }
@@ -532,6 +541,117 @@ mod tests {
             .iter()
             .find(|(c, _)| *c == code)
             .map(|(_, v)| v.as_str())
+    }
+
+    #[test]
+    fn an_external_reference_round_trips_by_name_path_and_layer_flags() {
+        use std::sync::Arc;
+
+        use opendraft_core::{
+            BlockDef, BlockEntity, BlockObjectId, Insert, XrefDef, XrefKind, XrefLayer,
+            XrefPathType, XrefReport,
+        };
+
+        let mut doc = Document::default();
+        let walls = doc.allocate_layer_id();
+        doc.push_layer(Layer::new(walls, "base|Walls"));
+        let root_id = doc.allocate_block_id();
+        let root = Arc::new(BlockDef {
+            id: root_id,
+            name: "base".into(),
+            base: Point::new(0.0, 0.0),
+            description: String::new(),
+            unit: Default::default(),
+            entities: vec![BlockEntity::new(
+                BlockObjectId(0),
+                Entity::Line {
+                    start: Point::new(0.0, 0.0),
+                    end: Point::new(1.0, 1.0),
+                },
+                Attributes::on_layer(LayerId::DEFAULT),
+            )],
+            dynamic: None,
+        });
+        doc.push_block(root.clone());
+        doc.set_xrefs(vec![XrefDef {
+            block: root_id,
+            path: "parts/base.dwg".into(),
+            path_type: XrefPathType::Relative,
+            kind: XrefKind::Overlay,
+            unloaded: false,
+            stamp: None,
+            layers: vec![XrefLayer {
+                source: "Walls".into(),
+                layer: walls,
+            }],
+            blocks: Vec::new(),
+            clip: None,
+            report: XrefReport::default(),
+        }]);
+        doc.add(Entity::Insert(Box::new(Insert::new_xref(
+            root,
+            Point::new(10.0, 5.0),
+        ))));
+        doc.set_insert_base(Point::new(1.0, 2.0));
+        doc.set_visretain(false);
+
+        let bytes = write(&doc).unwrap().bytes;
+        let pairs = pairs(&bytes);
+        // The BLOCK record called "base", headers included.
+        let blocks: Vec<Vec<(i32, String)>> = pairs
+            .iter()
+            .enumerate()
+            .filter(|(_, (c, v))| *c == 0 && v == "BLOCK")
+            .map(|(at, _)| {
+                pairs[at..]
+                    .iter()
+                    .skip(1)
+                    .take_while(|(c, _)| *c != 0)
+                    .cloned()
+                    .collect()
+            })
+            .collect();
+        let block = blocks
+            .iter()
+            .find(|b| value(b, 2) == Some("base"))
+            .expect("the reference's block");
+        assert_eq!(value(block, 70), Some("12"), "xref and overlay flags");
+        assert_eq!(value(block, 1), Some("parts/base.dwg"));
+        let layer = {
+            let at = pairs
+                .iter()
+                .position(|(c, v)| *c == 2 && v == "base|Walls")
+                .unwrap();
+            let start = pairs[..at].iter().rposition(|(c, _)| *c == 0).unwrap();
+            pairs[start..].iter().take(30).cloned().collect::<Vec<_>>()
+        };
+        assert_eq!(value(&layer, 70), Some("48"), "dependent and resolved");
+
+        let back = crate::dxf::read::read(&bytes).unwrap();
+        assert_eq!(back.document.xrefs().len(), 1);
+        let xref = &back.document.xrefs()[0];
+        assert_eq!(xref.path, "parts/base.dwg");
+        assert_eq!(xref.kind, XrefKind::Overlay);
+        assert!(xref.unloaded, "DXF keeps the reference, not the snapshot");
+        assert_eq!(xref.layers[0].source, "Walls");
+        assert_eq!(back.document.insert_base(), Point::new(1.0, 2.0));
+        assert!(!back.document.visretain());
+        assert!(back.document.block(xref.block).unwrap().entities.is_empty());
+        let Entity::Insert(insert) = &back.document.objects()[0].entity else {
+            panic!("the reference's insert");
+        };
+        assert!(insert.is_xref);
+        assert_eq!(insert.insertion, Point::new(10.0, 5.0));
+    }
+
+    #[test]
+    fn only_a_reference_layer_keeps_a_pipe_in_its_dxf_name() {
+        let mut doc = Document::default();
+        let id = doc.allocate_layer_id();
+        doc.push_layer(Layer::new(id, "a|b"));
+        let bytes = write(&doc).unwrap().bytes;
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("a_b") && !text.contains("a|b"));
     }
 
     #[test]
@@ -1147,5 +1267,84 @@ mod tests {
             .unwrap()
             .bytes;
         assert!(String::from_utf8_lossy(&bytes).contains("AC1009"));
+    }
+
+    #[test]
+    fn a_clip_boundary_round_trips_through_the_objects_section() {
+        use std::sync::Arc;
+
+        use opendraft_core::{
+            BlockDef, BlockEntity, BlockObjectId, Insert, XrefClip, XrefDef, XrefKind,
+            XrefPathType, XrefReport,
+        };
+
+        let mut doc = Document::default();
+        let root_id = doc.allocate_block_id();
+        let root = Arc::new(BlockDef {
+            id: root_id,
+            name: "base".into(),
+            base: Point::new(0.0, 0.0),
+            description: String::new(),
+            unit: Default::default(),
+            entities: vec![BlockEntity::new(
+                BlockObjectId(0),
+                Entity::Line {
+                    start: Point::new(0.0, 0.0),
+                    end: Point::new(2.0, 0.0),
+                },
+                Attributes::on_layer(LayerId::DEFAULT),
+            )],
+            dynamic: None,
+        });
+        doc.push_block(root.clone());
+        doc.set_xrefs(vec![XrefDef {
+            block: root_id,
+            path: "base.dwg".into(),
+            path_type: XrefPathType::Relative,
+            kind: XrefKind::Attach,
+            unloaded: false,
+            stamp: None,
+            layers: Vec::new(),
+            blocks: Vec::new(),
+            clip: Some(XrefClip::new(vec![
+                Point::new(0.0, -1.0),
+                Point::new(1.5, -1.0),
+                Point::new(1.5, 1.0),
+                Point::new(0.0, 1.0),
+            ])),
+            report: XrefReport::default(),
+        }]);
+        doc.add(Entity::Insert(Box::new(Insert::new_xref(
+            root,
+            Point::default(),
+        ))));
+        doc.set_xclip_frame(1);
+        doc.validate().unwrap();
+
+        let bytes = super::super::write::write(&doc).unwrap().bytes;
+        dxf::Drawing::load(&mut std::io::Cursor::new(bytes.clone())).expect("a valid DXF");
+        let text = String::from_utf8_lossy(&bytes);
+        for needed in ["ACAD_FILTER", "SPATIAL_FILTER", "$XCLIPFRAME"] {
+            assert!(text.contains(needed), "{needed} is written");
+        }
+        let loaded = crate::dxf::read::read(&bytes).unwrap();
+        assert!(
+            loaded.warnings.iter().all(|w| !w.contains("clip boundary")),
+            "{:?}",
+            loaded.warnings
+        );
+        let clip = loaded.document.xrefs()[0]
+            .clip
+            .as_ref()
+            .expect("the boundary came back");
+        assert!(clip.enabled);
+        assert_eq!(clip.boundary.len(), 4);
+        assert!(
+            (clip.boundary[2].x - 1.5).abs() < 1e-9,
+            "{:?}",
+            clip.boundary
+        );
+        assert_eq!(loaded.document.xclip_frame(), 1);
+        loaded.document.validate().unwrap();
     }
 }

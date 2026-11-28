@@ -285,6 +285,63 @@ fn build() -> Vec<SysVar<AppState>> {
         SysVar::read_only("DWGNAME", "Name of the current drawing", Kind::Text, |s| {
             Value::Text(s.docs[s.active].title.clone())
         }),
+        SysVar::int(
+            "VISRETAIN",
+            "Keep xref layer properties on reload: 0 no, 1 yes",
+            (0, 1),
+            |s| flag(s.session().document().visretain()),
+            |s, v| {
+                s.perform(opendraft_commands::SetVisretain::new(
+                    "VISRETAIN",
+                    int(v) == 1,
+                ));
+                Ok(())
+            },
+        ),
+        SysVar::int(
+            "XCLIPFRAME",
+            "Clip frames: 0 hidden, 1 drawn, 2 drawn and plotted",
+            (0, 2),
+            |s| Value::Int(i64::from(s.session().document().xclip_frame())),
+            |s, v| {
+                let value = u8::try_from(int(v)).unwrap_or(2);
+                s.perform(opendraft_commands::SetXclipFrame::new(
+                    "XCLIPFRAME",
+                    value,
+                ));
+                Ok(())
+            },
+        ),
+        SysVar::int(
+            "XREFTYPE",
+            "Default reference type for a new external reference: 0 attach, 1 overlay",
+            (0, 1),
+            |s| flag(s.settings.xref_overlay),
+            |s, v| {
+                s.settings.xref_overlay = int(v) == 1;
+                Ok(())
+            },
+        ),
+        SysVar::int(
+            "REFPATHTYPE",
+            "Default saved path for a new external reference: 0 no path, 1 relative, 2 full",
+            (0, 2),
+            |s| Value::Int(s.settings.ref_path_type.code()),
+            |s, v| {
+                s.settings.ref_path_type = crate::settings::RefPathDefault::from_code(int(v));
+                Ok(())
+            },
+        ),
+        SysVar::int(
+            "BINDTYPE",
+            "How Bind names dependent symbols: 0 prefix with $0$, 1 bare and merge",
+            (0, 1),
+            |s| flag(s.settings.bind_insert),
+            |s, v| {
+                s.settings.bind_insert = int(v) == 1;
+                Ok(())
+            },
+        ),
     ]
 }
 
@@ -324,6 +381,33 @@ mod tests {
         assert!(!state.settings.snap.enabled && state.settings.snap.endpoint);
         table.set("SNAPMODE", "0", &mut state).unwrap();
         assert!(!state.settings.snap.grid);
+    }
+
+    #[test]
+    fn the_xref_defaults_are_variables() {
+        let (table, mut state) = (table(), AppState::new());
+        assert_eq!(table.get("XREFTYPE", &state), Ok(Value::Int(0)));
+        assert_eq!(table.get("REFPATHTYPE", &state), Ok(Value::Int(1)));
+        table.set("XREFTYPE", "1", &mut state).unwrap();
+        assert!(state.settings.xref_overlay);
+        table.set("REFPATHTYPE", "2", &mut state).unwrap();
+        assert_eq!(
+            state.settings.ref_path_type,
+            crate::settings::RefPathDefault::Full
+        );
+        assert!(table.set("REFPATHTYPE", "3", &mut state).is_err());
+        assert_eq!(
+            state.settings.ref_path_type,
+            crate::settings::RefPathDefault::Full
+        );
+        assert_eq!(table.get("BINDTYPE", &state), Ok(Value::Int(0)));
+        table.set("BINDTYPE", "1", &mut state).unwrap();
+        assert!(state.settings.bind_insert);
+        assert_eq!(table.get("XCLIPFRAME", &state), Ok(Value::Int(2)));
+        table.set("XCLIPFRAME", "1", &mut state).unwrap();
+        assert_eq!(state.session().document().xclip_frame(), 1);
+        assert!(table.set("XCLIPFRAME", "3", &mut state).is_err());
+        assert_eq!(state.session().document().xclip_frame(), 1);
     }
 
     #[test]

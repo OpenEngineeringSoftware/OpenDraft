@@ -45,6 +45,7 @@ impl AppState {
             .with(Arc::clone(self.defaults()))
             .with(Arc::clone(&self.block_requests))
             .with(Arc::new(self.field_context()));
+        let context = self.with_xref_context(context);
         self.runner = Some(Runner::start_with(name, pickset, context, command));
         self.run_doc = self.active;
         self.pump_command();
@@ -486,6 +487,8 @@ mod tests {
             attribute_editor: None,
             block_dialog: None,
             field_dialog: None,
+            xref_load: None,
+            xref_attach: None,
             allow_empty: false,
             pick_locked: false,
             esc_backs: false,
