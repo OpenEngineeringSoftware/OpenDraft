@@ -224,6 +224,9 @@ impl OpenDraftApp {
     /// line, as in AutoCAD. So does a bare Enter: it answers the current
     /// prompt (finishes Copy, accepts a default) or repeats the last command.
     fn route_typing_to_command_line(&mut self, ctx: &egui::Context) {
+        // Keys pressed in a window of a detached panel that it did not use.
+        let forwarded = self.detached.take_forwarded();
+        ctx.input_mut(|i| i.events.extend(forwarded));
         // First, because dynamic input handles the frame and returns early.
         self.watch_keys(ctx);
         if self.route_dynamic_input(ctx) || self.browse_command_history(ctx) {

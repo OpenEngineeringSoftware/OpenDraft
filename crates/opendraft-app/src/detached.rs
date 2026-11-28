@@ -4,6 +4,7 @@
 //! without it the 30-second autosave would lose a panel that is only
 //! detached.
 
+use eframe::egui;
 use serde::{Deserialize, Serialize};
 
 use crate::dock::PanelTab;
@@ -23,7 +24,11 @@ pub struct Window {
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct Detached(Vec<Window>, #[serde(skip)] Starts);
+pub struct Detached(
+    Vec<Window>,
+    #[serde(skip)] Starts,
+    #[serde(skip)] Vec<egui::Event>,
+);
 
 /// Where each window was when it was first shown this session. A viewport's
 /// builder must not change while it is open (egui would move the window
@@ -77,6 +82,16 @@ impl Detached {
             w.at = Some(at);
             w.size = size;
         }
+    }
+
+    /// Keys pressed in a detached window that none of its widgets used: the
+    /// main window's shortcuts and command line get them next frame.
+    pub fn forward(&mut self, mut events: Vec<egui::Event>) {
+        self.2.append(&mut events);
+    }
+
+    pub fn take_forwarded(&mut self) -> Vec<egui::Event> {
+        std::mem::take(&mut self.2)
     }
 
     pub fn load(storage: Option<&dyn eframe::Storage>) -> Self {
@@ -136,5 +151,14 @@ mod tests {
         d.add(PanelTab::Properties, Some([-1900.0, 40.0]), [320.0, 600.0]);
         let text = ron::to_string(&d).unwrap();
         assert_eq!(ron::from_str::<Detached>(&text).unwrap(), d);
+    }
+
+    #[test]
+    fn forwarded_keys_are_handed_over_once() {
+        let mut d = Detached::default();
+        d.forward(vec![egui::Event::Text("l".into())]);
+        d.forward(vec![egui::Event::Copy]);
+        assert_eq!(d.take_forwarded().len(), 2);
+        assert!(d.take_forwarded().is_empty());
     }
 }

@@ -15,6 +15,8 @@ struct Asked {
     pub dock: Vec<PanelTab>,
     /// The window's own close button was pressed.
     pub close: Vec<PanelTab>,
+    /// Keys no widget of a window used (see [`unused_keys`]).
+    pub keys: Vec<egui::Event>,
 }
 
 impl OpenDraftApp {
@@ -109,6 +111,12 @@ fn show(
         let mut tab = panel;
         ctx.show_viewport_immediate(id, builder, |ctx, _class| {
             keep_above_main(ctx, panel);
+            // Typing with nothing focused here goes to the command line, as
+            // in the main window; where that is this window, focus it first.
+            let had_focus = ctx.wants_keyboard_input();
+            if panel == PanelTab::CommandLine && !had_focus && typed_text(ctx) {
+                viewer.state.cmdline.focus = true;
+            }
             egui::TopBottomPanel::top(egui::Id::new(("dock_strip", panel)))
                 .frame(
                     egui::Frame::NONE
@@ -125,6 +133,9 @@ fn show(
                 .show(ctx, |ui| {
                     egui_dock::TabViewer::ui(viewer, ui, &mut tab);
                 });
+            if !had_focus {
+                asked.keys.extend(unused_keys(ctx, panel));
+            }
             if ctx.input(|i| i.viewport().close_requested()) {
                 asked.close.push(panel);
             }
@@ -138,6 +149,32 @@ fn show(
         }
     }
     asked
+}
+
+fn typed_text(ctx: &egui::Context) -> bool {
+    ctx.input(|i| {
+        i.events
+            .iter()
+            .any(|e| matches!(e, egui::Event::Text(t) if !t.trim().is_empty()))
+    })
+}
+
+/// The key presses, typed text and clipboard keys of a window that no widget
+/// of it took, for the main window's shortcuts and command line. Typed text
+/// in the command line's own window went to its field, not here.
+fn unused_keys(ctx: &egui::Context, panel: PanelTab) -> Vec<egui::Event> {
+    ctx.input(|i| {
+        i.events
+            .iter()
+            .filter(|e| match e {
+                egui::Event::Key { pressed, .. } => *pressed,
+                egui::Event::Text(_) => panel != PanelTab::CommandLine,
+                egui::Event::Copy | egui::Event::Cut | egui::Event::Paste(_) => true,
+                _ => false,
+            })
+            .cloned()
+            .collect()
+    })
 }
 
 /// Above the main window while this program is the active one, an ordinary
@@ -170,6 +207,10 @@ pub(super) fn run(
 ) {
     settle(ctx, on, dock, places, detached);
     let asked = show(ctx, fill, detached, viewer);
+    if !asked.keys.is_empty() {
+        detached.forward(asked.keys);
+        ctx.request_repaint();
+    }
     for panel in asked.close {
         detached.remove(panel);
     }
