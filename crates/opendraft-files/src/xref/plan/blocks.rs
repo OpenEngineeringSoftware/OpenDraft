@@ -37,8 +37,9 @@ impl Planner<'_> {
             };
             self.check()?;
             let target = insert.block.clone();
+            // A reference of the source is planned on its own, where the
+            // insert is turned into one of a local block.
             if self.source.is_xref_block(target.id) {
-                self.nested += 1;
                 continue;
             }
             if self.source.block(target.id).is_none() {
@@ -56,12 +57,13 @@ impl Planner<'_> {
         }
         let id = self
             .next_block
-            .checked_add(order.len() as u64)
+            .checked_add(self.issued)
             .map(BlockId)
             .ok_or(XrefPlanError::TooMany {
                 what: "blocks in the source",
                 limit: self.limits.max_local_blocks,
             })?;
+        self.issued += 1;
         self.block_ids.insert(def.id, id);
         order.push(def.clone());
         Ok(())
@@ -77,7 +79,6 @@ impl Planner<'_> {
             if let Entity::Insert(insert) = &object.entity {
                 let target = insert.block.clone();
                 if self.source.is_xref_block(target.id) {
-                    self.nested += 1;
                     continue;
                 }
                 if self.source.block(target.id).is_none() {
@@ -101,9 +102,13 @@ impl Planner<'_> {
             let mut entities = Vec::with_capacity(def.entities.len());
             for entity in &def.entities {
                 self.check()?;
+                let mut nested = None;
                 if let Entity::Insert(insert) = &entity.entity {
                     if self.source.is_xref_block(insert.block.id) {
-                        continue;
+                        match self.nested_insert(insert)? {
+                            Some(standing_in) => nested = Some(standing_in),
+                            None => continue,
+                        }
                     }
                 }
                 let made = {
@@ -115,9 +120,15 @@ impl Planner<'_> {
                         block_ids: &self.block_ids,
                         xref_name: &self.name,
                     };
-                    remap
-                        .entity(&entity.entity)
-                        .map(|made| (made, remap.attributes(&entity.attrs)))
+                    match nested {
+                        Some(insert) => Some((
+                            Entity::Insert(Box::new(insert)),
+                            remap.attributes(&entity.attrs),
+                        )),
+                        None => remap
+                            .entity(&entity.entity)
+                            .map(|made| (made, remap.attributes(&entity.attrs))),
+                    }
                 };
                 let Some((made, attrs)) = made else {
                     self.skip("object of a missing block");
@@ -154,12 +165,18 @@ impl Planner<'_> {
         let source = self.source;
         for object in source.model_objects() {
             self.check()?;
+            let mut nested = None;
             if let Entity::Insert(insert) = &object.entity {
                 if self.source.is_xref_block(insert.block.id) {
-                    continue;
+                    match self.nested_insert(insert)? {
+                        Some(standing_in) => nested = Some(standing_in),
+                        None => continue,
+                    }
                 }
             }
-            if out.len() as u64 >= self.limits.max_model_entities {
+            // The limit is over every source of the reference, not one.
+            self.entities_total += 1;
+            if self.entities_total > self.limits.max_model_entities {
                 return Err(XrefPlanError::TooMany {
                     what: "objects in the source's model space",
                     limit: self.limits.max_model_entities,
@@ -174,9 +191,15 @@ impl Planner<'_> {
                     block_ids: &self.block_ids,
                     xref_name: &self.name,
                 };
-                remap
-                    .entity(&object.entity)
-                    .map(|made| (made, remap.attributes(&object.attrs)))
+                match nested {
+                    Some(insert) => Some((
+                        Entity::Insert(Box::new(insert)),
+                        remap.attributes(&object.attrs),
+                    )),
+                    None => remap
+                        .entity(&object.entity)
+                        .map(|made| (made, remap.attributes(&object.attrs))),
+                }
             };
             let Some((made, attrs)) = made else {
                 self.skip("object of a missing block");

@@ -240,6 +240,8 @@ impl<'a> Binder<'a> {
             return;
         }
         if self.kind == BindType::Insert {
+            // A layer of a nested reference (`floors|Walls`) is a bare name too.
+            let source = bare(source);
             let key = source.to_lowercase();
             if let Some(existing) = self.taken_layers.get(&key).copied() {
                 if existing != layer {
@@ -334,14 +336,23 @@ impl<'a> Binder<'a> {
 
     /// The bare name in Insert mode when it is free, otherwise `xref$n$name`.
     fn symbol_name(&self, xref: &str, symbol: &str, taken: &HashSet<String>) -> String {
-        if self.kind == BindType::Insert && !taken.contains(&symbol.to_lowercase()) {
-            return symbol.to_owned();
+        if self.kind == BindType::Insert && !taken.contains(&bare(symbol).to_lowercase()) {
+            return bare(symbol).to_owned();
         }
         prefixed_name(xref, symbol, |name| taken.contains(name))
     }
 }
 
+/// The last part of a symbol a nested reference brought (`site|floors|Walls`
+/// is held by the top reference as `floors|Walls`): `Walls`.
+fn bare(symbol: &str) -> &str {
+    symbol.rsplit('|').next().unwrap_or(symbol)
+}
+
+/// `xref$n$symbol`, the `|` of a nested symbol written `$0$` as AutoCAD does,
+/// because a `|` belongs to reference layers alone.
 fn prefixed_name(xref: &str, symbol: &str, taken: impl Fn(&str) -> bool) -> String {
+    let symbol = symbol.replace('|', "$0$");
     let mut n = 0u32;
     loop {
         let name = format!("{xref}${n}${symbol}");

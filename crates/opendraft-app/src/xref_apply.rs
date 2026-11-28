@@ -567,3 +567,132 @@ mod guard_tests {
         assert_eq!(state.session().document().validate(), Ok(()));
     }
 }
+
+#[cfg(test)]
+mod nested_tests {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+
+    use opendraft_core::{
+        Attributes, BlockDef, BlockEntity, BlockObjectId, Document, Entity, Insert, Layer, Point,
+        XrefDef, XrefKind, XrefLayer, XrefLoadRequest, XrefReport,
+    };
+    use opendraft_files::{plan_xref, FileFormat, NativeFormat, XrefLimits};
+
+    use crate::state::AppState;
+
+    use super::*;
+
+    /// A source "site" that attaches the drawing at `inner_path`, which holds
+    /// layer "Walls".
+    fn site(inner_path: &str) -> Document {
+        let mut doc = Document::default();
+        let bound = doc.allocate_layer_id();
+        doc.push_layer(Layer::new(bound, "inner|Walls"));
+        let id = doc.allocate_block_id();
+        let root = Arc::new(BlockDef {
+            id,
+            name: "inner".to_owned(),
+            base: Point::default(),
+            description: String::new(),
+            unit: Default::default(),
+            entities: vec![BlockEntity::new(
+                BlockObjectId(0),
+                Entity::Circle {
+                    center: Point::default(),
+                    radius: 1.0,
+                },
+                Attributes::on_layer(bound),
+            )],
+            dynamic: None,
+        });
+        doc.push_block(root.clone());
+        doc.set_xrefs(vec![XrefDef {
+            block: id,
+            path: inner_path.to_owned(),
+            path_type: XrefPathType::Full,
+            kind: XrefKind::Attach,
+            unloaded: false,
+            stamp: None,
+            layers: vec![XrefLayer {
+                source: "Walls".to_owned(),
+                layer: bound,
+            }],
+            blocks: Vec::new(),
+            clip: None,
+            report: XrefReport::default(),
+        }]);
+        doc.add(Entity::Insert(Box::new(Insert::new_xref(
+            root,
+            Point::new(2.0, 0.0),
+        ))));
+        doc
+    }
+
+    #[test]
+    fn a_reference_with_a_nested_one_attaches_undoes_and_detaches_as_one() {
+        let mut inner = Document::default();
+        let walls = inner.allocate_layer_id();
+        inner.push_layer(Layer::new(walls, "Walls"));
+        inner.add_with(
+            Entity::Line {
+                start: Point::new(0.0, 0.0),
+                end: Point::new(4.0, 0.0),
+            },
+            Attributes::on_layer(walls),
+        );
+        let file =
+            std::env::temp_dir().join(format!("od-xref-nested-app-{}.odraft", std::process::id()));
+        std::fs::write(&file, NativeFormat.write(&inner).unwrap().bytes).unwrap();
+
+        let source = site(&file.to_string_lossy());
+        let mut state = AppState::new();
+        let request = XrefLoadRequest {
+            block: None,
+            name: "site".to_owned(),
+            source_path: "/work/site.dwg".to_owned(),
+            path_type: XrefPathType::Full,
+            kind: XrefKind::Attach,
+            host_dir: None,
+            host_path: None,
+        };
+        let plan = plan_xref(
+            state.session().document(),
+            &source,
+            &request,
+            &XrefLimits::default(),
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        let root = plan.xref.block;
+        state.start_command("XATTACH", move |ed| {
+            attach(ed, plan, Point::new(0.0, 0.0), (1.0, 1.0), 0.0)
+        });
+        state.settle_command();
+        {
+            let doc = state.session().document();
+            assert_eq!(doc.xrefs().len(), 1, "the nesting is inside one record");
+            assert!(doc.layers().iter().any(|l| l.name == "site|inner|Walls"));
+            assert_eq!(doc.xref(root).unwrap().blocks.len(), 1);
+            assert_eq!(doc.validate(), Ok(()));
+        }
+        state.undo();
+        assert!(state.session().document().xrefs().is_empty());
+        assert!(state
+            .session()
+            .document()
+            .layers()
+            .iter()
+            .all(|l| !l.name.contains('|')));
+        state.redo();
+        assert_eq!(state.session().document().xrefs().len(), 1);
+
+        state.start_command("Detach", move |ed| detach(ed, vec![root]));
+        state.settle_command();
+        let doc = state.session().document();
+        assert!(doc.xrefs().is_empty());
+        assert!(doc.layers().iter().all(|l| !l.name.contains('|')));
+        assert_eq!(doc.validate(), Ok(()));
+        let _ = std::fs::remove_file(file);
+    }
+}

@@ -31,3 +31,31 @@ pub(crate) fn source_problem(source_path: &str, host_dir: Option<&str>) -> Optio
         Err(why) => Some(why.to_string()),
     }
 }
+
+/// What a load left out that the drawing will be missing: the nested
+/// references it could not read. The rest of its report stays in the record.
+pub(crate) fn missing_content(notes: &[String]) -> Vec<String> {
+    notes
+        .iter()
+        .filter(|note| note.starts_with("Nested external reference") && note.contains("not loaded"))
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_nested_references_that_were_left_out_are_reported() {
+        let notes = [
+            "Loaded nested external reference \"a\" from /x/a.dwg.".to_owned(),
+            "Nested external reference \"b\" was not loaded: the file was not found.".to_owned(),
+            "Dimension ties, leader annotations and hatch sources were cleared.".to_owned(),
+        ];
+        assert_eq!(
+            missing_content(&notes),
+            ["Nested external reference \"b\" was not loaded: the file was not found."]
+        );
+    }
+}
