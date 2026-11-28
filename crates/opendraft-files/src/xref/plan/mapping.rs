@@ -13,6 +13,10 @@ impl Planner<'_> {
                 self.linetypes.insert(record.id, record.id);
                 continue;
             }
+            // A reference's own linetype, which that reference brings itself.
+            if self.is_nested_symbol(&record.name) {
+                continue;
+            }
             if let Some(host) = self.host.linetypes().named(&record.name) {
                 self.linetypes.insert(record.id, host.id);
                 continue;
@@ -50,14 +54,14 @@ impl Planner<'_> {
         self.layers.insert(LayerId::DEFAULT, LayerId::DEFAULT);
         let source = self.source;
         for layer in source.layers() {
-            if layer.id == LayerId::DEFAULT {
+            if layer.id == LayerId::DEFAULT || self.is_nested_symbol(&layer.name) {
                 continue;
             }
             let want = format!("{}|{}", self.name, layer.name);
             let bound = self
                 .existing
                 .as_ref()
-                .and_then(|x| x.layer_for(&layer.name));
+                .and_then(|x| x.layer_for(&format!("{}{}", self.prefix, layer.name)));
             if let Some(id) = bound {
                 if self
                     .host
@@ -148,6 +152,9 @@ impl Planner<'_> {
         for style in source.text_styles() {
             if style.id == TextStyleId::STANDARD || style.name.eq_ignore_ascii_case("Standard") {
                 self.styles.insert(style.id, TextStyleId::STANDARD);
+                continue;
+            }
+            if self.is_nested_symbol(&style.name) {
                 continue;
             }
             let want = format!("{}|{}", self.name, style.name);

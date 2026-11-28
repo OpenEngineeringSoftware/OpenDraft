@@ -289,3 +289,38 @@ fn an_unloaded_reference_refuses_binding_instead_of_binding_nothing() {
     let error = doc.plan_bind(&[root], BindType::Bind).unwrap_err();
     assert!(matches!(error, BindError::Unloaded(_)), "{error}");
 }
+
+/// `host()` with the reference's layer `base|inner|Walls`, the layer `Walls`
+/// of a reference `inner` that `base` attaches.
+fn host_with_a_nested_layer() -> (Document, BlockId, LayerId) {
+    let (mut doc, root, _chair, walls) = host();
+    let mut layer = doc.layer(walls).unwrap().clone();
+    layer.name = "base|inner|Walls".to_owned();
+    doc.replace_layer(layer);
+    let mut records = doc.xrefs().to_vec();
+    records[0].layers[0].source = "inner|Walls".to_owned();
+    doc.set_xrefs(records);
+    doc.validate().unwrap();
+    (doc, root, walls)
+}
+
+#[test]
+fn a_nested_layer_is_bound_with_no_pipe_in_its_name() {
+    let (mut doc, root, walls) = host_with_a_nested_layer();
+    let plan = doc.plan_bind(&[root], BindType::Bind).unwrap();
+    apply(&mut doc, plan);
+    assert_eq!(
+        doc.layer(walls).map(|l| l.name.as_str()),
+        Some("base$0$inner$0$Walls")
+    );
+    assert_eq!(doc.validate(), Ok(()));
+}
+
+#[test]
+fn insert_mode_gives_a_nested_layer_its_bare_name() {
+    let (mut doc, root, walls) = host_with_a_nested_layer();
+    let plan = doc.plan_bind(&[root], BindType::Insert).unwrap();
+    apply(&mut doc, plan);
+    assert_eq!(doc.layer(walls).map(|l| l.name.as_str()), Some("Walls"));
+    assert_eq!(doc.validate(), Ok(()));
+}

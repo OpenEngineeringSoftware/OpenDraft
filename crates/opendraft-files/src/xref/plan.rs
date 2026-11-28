@@ -19,6 +19,9 @@ use super::source::XrefLimits;
 
 mod blocks;
 mod mapping;
+mod nested;
+#[cfg(test)]
+mod nested_tests;
 
 /// Plan a reference of `source` in `host`. Nothing is changed in either
 /// drawing; the caller applies the plan through commands.
@@ -63,6 +66,14 @@ pub fn plan_xref(
         }
     }
 
+    let source_file = resolve(request.source_path.trim(), host_dir.as_deref())
+        .unwrap_or_else(|_| PathBuf::from(request.source_path.trim()));
+    // The files a nested reference may not lead back to: this source and the
+    // drawing the reference is for.
+    let chain: Vec<PathBuf> = std::iter::once(source_file.clone())
+        .chain(request.host_path.as_ref().map(PathBuf::from))
+        .map(|path| std::fs::canonicalize(&path).unwrap_or(path))
+        .collect();
     let next_block = host.next_block_id();
     let root_id = request.block.unwrap_or(BlockId(next_block));
     let mut planner = Planner {
@@ -90,12 +101,21 @@ pub fn plan_xref(
         visiting: HashSet::new(),
         skipped: BTreeMap::new(),
         notes: Vec::new(),
-        nested: 0,
         limits: *limits,
         cancelled,
         steps: 0,
         cleared_associations: false,
         dynamic_states: false,
+        prefix: String::new(),
+        source_dir: source_file.parent().map(Path::to_path_buf),
+        chain,
+        depth: 0,
+        issued: 0,
+        locals_done: Vec::new(),
+        bindings_done: Vec::new(),
+        entities_total: 0,
+        loaded_nested: 0,
+        nested_cache: HashMap::new(),
     };
     planner.map_linetypes()?;
     planner.map_layers()?;
@@ -111,8 +131,6 @@ pub fn plan_xref(
     let layers = planner.bindings();
     let mut report = planner.report(root_entities.len() as u64);
     let mut notes = std::mem::take(&mut planner.notes);
-    let source_file = resolve(request.source_path.trim(), host_dir.as_deref())
-        .unwrap_or_else(|_| PathBuf::from(request.source_path.trim()));
     let (saved, path_type, path_note) =
         format_saved_path(&source_file, host_dir.as_deref(), request.path_type);
     if let Some(note) = path_note {
@@ -194,12 +212,30 @@ struct Planner<'a> {
     visiting: HashSet<BlockId>,
     skipped: BTreeMap<String, u64>,
     notes: Vec<String>,
-    nested: u64,
     limits: XrefLimits,
     cancelled: &'a AtomicBool,
     steps: u64,
     cleared_associations: bool,
     dynamic_states: bool,
+    /// What a layer of this source is called inside the top reference's
+    /// snapshot: empty for the source itself, `child|` for a reference it
+    /// attaches, `child|grandchild|` below that.
+    prefix: String,
+    /// The folder of the source file, where its own references are looked for.
+    source_dir: Option<PathBuf>,
+    /// The canonical files from the top source down to this one.
+    chain: Vec<PathBuf>,
+    depth: usize,
+    /// Block ids handed out so far after `next_block`, over every source.
+    issued: u64,
+    /// Local blocks and layer bindings of the nested sources already planned.
+    locals_done: Vec<Arc<BlockDef>>,
+    bindings_done: Vec<XrefLayer>,
+    entities_total: u64,
+    loaded_nested: u64,
+    /// The block each of this source's reference inserts stands for, by the
+    /// source's block id (`None` when the reference was not loaded).
+    nested_cache: HashMap<BlockId, Option<Arc<BlockDef>>>,
 }
 
 impl Planner<'_> {
@@ -215,24 +251,30 @@ impl Planner<'_> {
         *self.skipped.entry(what.to_owned()).or_insert(0) += 1;
     }
 
-    fn bindings(&self) -> Vec<XrefLayer> {
-        let mut out: Vec<XrefLayer> = self
-            .layers
+    /// This source's own layers, named as the top reference's snapshot has them.
+    fn own_bindings(&self) -> Vec<XrefLayer> {
+        self.layers
             .iter()
             .filter(|(source, host)| **source != LayerId::DEFAULT && **host != LayerId::DEFAULT)
             .filter_map(|(source, host)| {
                 self.source.layer(*source).map(|l| XrefLayer {
-                    source: l.name.clone(),
+                    source: format!("{}{}", self.prefix, l.name),
                     layer: *host,
                 })
             })
-            .collect();
+            .collect()
+    }
+
+    fn bindings(&self) -> Vec<XrefLayer> {
+        let mut out = self.own_bindings();
+        out.extend(self.bindings_done.iter().cloned());
         out.sort_by_key(|a| a.source.to_lowercase());
         out
     }
 
     fn locals(&self) -> Vec<Arc<BlockDef>> {
         let mut out: Vec<Arc<BlockDef>> = self.blocks.values().cloned().collect();
+        out.extend(self.locals_done.iter().cloned());
         out.sort_by_key(|b| b.id.0);
         out
     }
@@ -251,16 +293,10 @@ impl Planner<'_> {
     fn report(&self, model_entities: u64) -> XrefReport {
         let mut report = XrefReport {
             model_entities,
-            local_blocks: self.blocks.len() as u64,
+            local_blocks: self.locals().len() as u64,
             skipped: self.skipped.clone(),
             notes: Vec::new(),
         };
-        if self.nested > 0 {
-            report.notes.push(format!(
-                "Skipped {} nested external reference(s); nested xrefs are not loaded yet.",
-                self.nested
-            ));
-        }
         if self.cleared_associations {
             report.notes.push(
                 "Dimension ties, leader annotations and hatch sources were cleared.".to_owned(),
@@ -413,7 +449,7 @@ mod tests {
     }
 
     #[test]
-    fn a_nested_xref_is_skipped_and_reported() {
+    fn a_nested_xref_that_cannot_be_read_is_skipped_and_reported() {
         let mut source = Document::default();
         let walls = source.allocate_layer_id();
         source.push_layer(Layer::new(walls, "inner|Walls"));
@@ -466,7 +502,7 @@ mod tests {
             .report
             .notes
             .iter()
-            .any(|n| n.contains("nested external reference")));
+            .any(|n| n.contains("Nested external reference")));
     }
 
     fn host_with_reference() -> (Document, LayerId, BlockId) {

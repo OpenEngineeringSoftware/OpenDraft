@@ -258,6 +258,7 @@ fn plan_and_attach(
         Ok(plan) => {
             let label = plan.root.name.clone();
             let count = plan.root.entities.len();
+            let missing = crate::xref_source::missing_content(&plan.xref.report.notes);
             xref_apply::attach(ed, plan, at, scale, rotation)?;
             ed.say(
                 Wording::new(
@@ -267,6 +268,9 @@ fn plan_and_attach(
                 .part("name", Wording::plain(label))
                 .part("objects", crate::text::objects(count)),
             );
+            for line in missing {
+                ed.say(Wording::plain(line));
+            }
         }
         Err(why) => {
             ed.say(
@@ -313,7 +317,11 @@ pub(crate) fn reload_block(ed: &mut Editor, block: BlockId) -> Result<(), Cancel
     let name = request.name.clone();
     match ed.ask_xref_plan(request)? {
         Ok(plan) => {
+            let missing = crate::xref_source::missing_content(&plan.xref.report.notes);
             xref_apply::reload(ed, plan)?;
+            for line in missing {
+                ed.say(Wording::plain(line));
+            }
             ed.say(
                 Wording::new(key!("Reloaded external reference \"%{name}\""), &[])
                     .part("name", Wording::plain(name)),
